@@ -399,7 +399,7 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
 },
 
 scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach Nr. 21100. Die einzelnen Regelungen sind verschiedene Gegenstände; ihre Werte werden addiert (§ 35 Abs. 1, § 111 Nr. 2).',
- form:()=>fs('Vermögen',money('s_verm','Vermögensauseinandersetzung',0,'Wert der übertragenen Gegenstände bzw. Ausgleichszahlung')+money('s_grund','davon / zusätzlich Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')
+ form:()=>fs('Vermögen',money('s_grund','Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')+money('s_verm','Übriges Vermögen (ohne Grundbesitz)',0,'Wert der übrigen übertragenen Gegenstände bzw. Ausgleichszahlung; wird zum Grundbesitz addiert')
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
   +fs('Unterhalt',money('s_nu','Nachehelicher Unterhalt, monatlich',0)+count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)
      +money('s_nuv','Unterhaltsverzicht, Wert',5000,'billiges Ermessen § 36 Abs. 1')+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
@@ -408,7 +408,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   +fs('Vollzug und Auslagen',chk('s_vollzug','Vollzugsgebühr Nr. 22110 (bei Grundbesitz)',true)+chk('s_xml','XML-Strukturdaten Nr. 22114',true)
      +count('s_seiten','Seiten Dokumentenpauschale',60)+count('s_gba','Grundbuchabrufe',1)),
  calc(){
-  const parts=[['Vermögensauseinandersetzung',val('s_verm')],['Grundbesitz',val('s_grund')],['Gütertrennung',val('s_gt')],
+  const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
     ['Nachehelicher Unterhalt',val('s_nu')*12*val('s_nuj')],['Unterhaltsverzicht',val('s_nuv')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
     ['Versorgungsausgleich',val('s_va')],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
