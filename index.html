@@ -17,7 +17,7 @@ img{max-width:100%}
 [hidden]{display:none!important}
 .aktionen{display:flex;flex-wrap:wrap;gap:8px}
 @media print{
-  nav,#form,.copy,.foot{display:none!important}
+  nav,#form,.copy,.uebernahme,.foot{display:none!important}
   body{background:#fff!important;color:#000!important}
   .grid{display:block}
   .bill{position:static;border:0;padding:0}
@@ -98,6 +98,8 @@ tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:v
 .notes{margin:14px 0 0;padding:10px 12px;background:var(--warn-soft);color:var(--ink);border-radius:5px;font-size:.82rem}
 .notes ul{margin:0;padding-left:18px}
 .notes li+li{margin-top:4px}
+.uebernahme{margin-top:14px;font:inherit;font-weight:600;background:var(--accent);border:1px solid var(--accent);color:var(--bg);padding:8px 16px;border-radius:6px;cursor:pointer}
+.uebernahme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .copy{margin-top:14px;font:inherit;font-weight:500;background:transparent;border:1px solid var(--accent);color:var(--accent);padding:7px 14px;border-radius:6px;cursor:pointer}
 .foot{margin-top:28px;color:var(--muted);font-size:.8rem;max-width:90ch}
 .baum{margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:8px;background:var(--bg);grid-column:1/-1}
@@ -134,7 +136,7 @@ tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:v
       <p class="gw" id="gw"></p>
       <div class="tw"><table id="bill"></table></div>
       <div class="notes" id="notes" hidden></div>
-      <div class="aktionen"><button class="copy" id="copy" type="button">Als Text kopieren</button><button class="copy" id="drucken" type="button" onclick="window.print()">Drucken</button></div>
+      <div class="aktionen"><button class="uebernahme" id="uebernehmen" type="button" hidden>In den Vorgesprächsbogen übernehmen</button><button class="copy" id="zurueck" type="button" hidden>Zurück zum Bogen</button><button class="copy" id="copy" type="button">Als Text kopieren</button><button class="copy" id="drucken" type="button" onclick="window.print()">Drucken</button></div>
     </aside>
   </div>
   <p class="foot">Überschlägige Berechnung für die häufigsten Gestaltungen. Gebühren nach Tabelle B (Mindestgebühr 15 €), gerundet auf volle Cent. Grundbuchabruf, ZTR/ZVR-Gebühren und Gerichtsgebühren werden als durchlaufende Posten ohne Umsatzsteuer ausgewiesen. Registergebühren und Verwahrgebühr bitte bei Änderungen der Satzungen bzw. des KV anpassen; maßgeblich bleibt die Prüfung im Einzelfall.</p>
@@ -696,6 +698,7 @@ function run(){
   last.text=[`Kostenberechnung ${m.titel}`,r.gw,''].concat(r.P.filter(p=>!p.sec).map(p=>`Nr. ${p.kv}  ${p.txt}${p.wert!=null?` (${satzTxt(p.satz)} aus ${eur(p.wert)})`:''}: ${eur(p.betrag)}`
     +(p.items?p.items.map(([t,x])=>`\n      ${t}: ${eur(x)}`).join(''):'')))
     .concat([`Zwischensumme netto: ${eur(netto)}`,`USt 19 %: ${eur(ust)}`]).concat(r.D.map(d=>`${d.txt}: ${eur(d.betrag)}`)).concat([`Gesamtbetrag: ${eur(total)}`]).join('\n');
+  last.summe={netto,ust,durchlaufend:durch,gesamt:total};
   // Eingebettet (z. B. im Vorgesprächsbogen): Ergebnis an die einbettende Seite melden
   if(eingebettet) parent.postMessage({typ:'gnotkg-kosten',reiter:cur,titel:m.titel,gw:r.gw,netto,ust,durchlaufend:durch,gesamt:total,text:last.text},'*');
 }
@@ -756,6 +759,7 @@ function ausAdresse(){
   const m=/^#([a-z]+)(?:\?(.*))?$/.exec(location.hash); if(!m||!M[m[1]]) return null;
   const k=m[1], p=new URLSearchParams(m[2]||'');
   if(p.has('einbetten')){ eingebettet=window.parent!==window; p.delete('einbetten'); }
+  if(p.has('fenster')){ fenster=!!window.opener; p.delete('fenster'); }
   // s_nm1/s_nm2: Nettoeinkommen monatlich statt Brutto; der Rechner rechnet es in das Brutto zurück
   const netto=[1,2].map(i=>p.has(`s_nm${i}`)?parse(p.get(`s_nm${i}`)):null); p.delete('s_nm1'); p.delete('s_nm2');
   const werte=[...p].filter(([id])=>FELDER[k].test(id)&&/^[a-z0-9_]+$/.test(id));
@@ -779,10 +783,25 @@ function ausAdresse(){
   history.replaceState(null,'','#'+k);
   return k;
 }
-let eingebettet=false;
-window.addEventListener('hashchange',()=>{const k=ausAdresse(); if(k) show(k);});
+let eingebettet=false, fenster=false;
+/* Rückkanal zum Vorgesprächsbogen: als iframe die einbettende Seite, als eigenes Fenster (fenster=1) das öffnende Fenster.
+   „In den Vorgesprächsbogen übernehmen“ schickt die ganze Berechnung samt Herleitung zurück. */
+const rueckkanal=()=>eingebettet?parent:fenster&&window.opener&&!window.opener.closed?window.opener:null;
+function rueckkanalKnoepfe(){ const r=!!rueckkanal(); document.getElementById('uebernehmen').hidden=!r; document.getElementById('zurueck').hidden=!(r&&fenster&&!eingebettet); }
+document.getElementById('uebernehmen').addEventListener('click',e=>{
+  const ziel=rueckkanal(), b=e.currentTarget; if(!ziel||!last) return;
+  const m=M[cur], herleitung=[...document.querySelectorAll('#form .derived,#form .lookup')].map(x=>x.textContent.trim()).filter(Boolean).join('\n\n');
+  ziel.postMessage({typ:'gnotkg-uebernahme',reiter:cur,titel:m.titel,gw:last.gw,...last.summe,text:last.text,herleitung,
+    positionen:last.P.filter(x=>!x.sec).map(({kv,txt,sub,wert,satz,betrag,items})=>({kv,txt,sub,wert,satz,betrag,items})),
+    durchlaufendePosten:last.D.map(({kv,txt,sub,betrag})=>({kv,txt,sub,betrag})),hinweise:last.N.slice()},'*');
+  if(fenster&&!eingebettet){ b.textContent='Übernommen – zurück zum Bogen'; setTimeout(()=>window.close(),400); }
+  else { b.textContent='Übernommen ✓'; setTimeout(()=>b.textContent='In den Vorgesprächsbogen übernehmen',1600); }
+});
+document.getElementById('zurueck').addEventListener('click',()=>window.close());
+window.addEventListener('hashchange',()=>{const k=ausAdresse(); if(k) show(k); rueckkanalKnoepfe();});
 let start='kauf'; try{start=localStorage.getItem('gnotkg-tab')||'kauf'}catch(e){} if(!M[start]) start='kauf';
 show(ausAdresse()||start);
+rueckkanalKnoepfe();
 </script>
 <script>
 // Offline-Betrieb: Service Worker registrieren (nur über https bzw. localhost)

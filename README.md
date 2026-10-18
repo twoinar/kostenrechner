@@ -21,6 +21,7 @@ Andere Formulare (z. B. der Vorgesprächsbogen) können einen Reiter öffnen und
 - Die übergebenen Werte ersetzen die gespeicherten Eingaben dieses Reiters; nicht übergebene Felder stehen auf der Vorgabe. Haken: `1` oder `0`.
 - Scheidung: `s_nm1`/`s_nm2` übergeben das Nettoeinkommen monatlich; der Rechner rechnet es in das Bruttoeinkommen (`s_bm1`/`s_bm2`) zurück (Steuerklasse I, Kinder und Kirchensteuer wie übergeben). Ein ebenfalls übergebenes Brutto geht vor.
 - Danach kürzt der Rechner die Adresse auf `#reiter`, damit ein Neuladen spätere Änderungen nicht überschreibt.
+- Mit `einbetten=1` (im `<iframe>`) oder `fenster=1` (eigenes Fenster, mit `window.open` ohne `noopener` geöffnet) erscheint der Knopf „In den Vorgesprächsbogen übernehmen“. Er schickt `{typ:"gnotkg-uebernahme", reiter, titel, gw, netto, ust, durchlaufend, gesamt, text, herleitung, positionen, durchlaufendePosten, hinweise}` an die einbettende bzw. öffnende Seite; das eigene Fenster schließt sich danach.
 - Mit `einbetten=1` meldet der Rechner in einem `<iframe>` jedes Ergebnis per `postMessage` an die einbettende Seite: `{typ:"gnotkg-kosten", reiter, titel, gw, netto, ust, durchlaufend, gesamt, text}`.
 
 ## Hinweis
