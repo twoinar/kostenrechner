@@ -190,10 +190,27 @@ function vaKapitalwert(art,brutto,kw,jahre,ost){
   if(art==='kapital') return {wert:kw,text:'laut Auskunft des Versorgungsträgers'};
   return {wert:0,text:'keine Anwartschaft'};
 }
-function vaEhegatte(i,art,brutto){
+/* Bereinigtes Nettoeinkommen für den Unterhalt aus dem Jahresbrutto, Steuerklasse I, Rechtsstand 2026:
+   Einkommensteuer § 32a EStG, Solidaritätszuschlag, Arbeitnehmeranteile zur Sozialversicherung,
+   davon 5 % berufsbedingte Aufwendungen (mind. 50 €, höchstens 150 € monatlich). Beamte ohne Sozialabgaben. */
+const SV={kv:0.0875,pv:0.018,pvKinderlos:0.006,rv:0.093,av:0.013,bbgKv:69750,bbgRv:101400};
+function est2026(zve){const x=Math.floor(Math.max(0,zve));
+  if(x<=12348) return 0;
+  if(x<=17799){const y=(x-12348)/10000; return Math.floor((914.51*y+1400)*y);}
+  if(x<=69878){const z=(x-17799)/10000; return Math.floor((173.10*z+2397)*z+1034.87);}
+  if(x<=277825) return Math.floor(0.42*x-11135.63);
+  return Math.floor(0.45*x-19470.38);}
+function bereinigtesNetto(brutto,beamter,kinderlos,kirche){
+  const kvpv=beamter?0:Math.min(brutto,SV.bbgKv)*(SV.kv+SV.pv+(kinderlos?SV.pvKinderlos:0));
+  const rvav=beamter?0:Math.min(brutto,SV.bbgRv)*(SV.rv+SV.av);
+  const zve=brutto-1230-36-kvpv-(beamter?0:Math.min(brutto,SV.bbgRv)*SV.rv);
+  const est=est2026(zve), soli=r2(Math.min(est*0.055,Math.max(0,(est-20350)*0.119))), kist=kirche?r2(est*0.09):0;
+  const netto=(brutto-est-soli-kist-kvpv-rvav)/12, beruf=Math.min(150,Math.max(50,netto*0.05));
+  return {netto:r2(netto),beruf:r2(beruf),bereinigt:r2(Math.max(0,netto-beruf)),steuer:r2(est+soli+kist),sv:r2(kvpv+rvav)};
+}
+function vaEhegatte(i,art){
   return select(`s_va${i}art`,`Ehegatte ${i}: Versorgung`,[['grv','Gesetzliche Rentenversicherung',art==='grv'],['beamt','Beamtenversorgung',art==='beamt'],
       ['kapital','Kapitalwert laut Auskunft (Betriebsrente, privat)',art==='kapital'],['keine','keine Anwartschaft',art==='keine']])
-    +money(`s_va${i}br`,`Ehegatte ${i}: Bruttoeinkommen jährlich`,brutto,'bei Beamten die ruhegehaltfähigen Dienstbezüge')
     +money(`s_va${i}kw`,`Ehegatte ${i}: Kapitalwert laut Auskunft`,0,'korrespondierender Kapitalwert, § 47 VersAusglG');
 }
 const nutzungsfaktor=alter=>alter<=30?20:alter<=50?15:alter<=70?10:5;
@@ -430,26 +447,30 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
 scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach Nr. 21100. Die einzelnen Regelungen sind verschiedene Gegenstände; ihre Werte werden addiert (§ 35 Abs. 1, § 111 Nr. 2).',
  form:()=>fs('Vermögen',money('s_grund','Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')+money('s_verm','Übriges Vermögen (ohne Grundbesitz)',0,'Wert der übrigen übertragenen Gegenstände bzw. Ausgleichszahlung; wird zum Grundbesitz addiert')
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
-  +fs('Unterhalt',money('s_ek1','Einkommen Ehegatte 1, monatlich netto',0)+money('s_ek2','Einkommen Ehegatte 2, monatlich netto',0,'Unterhalt = Differenz × 0,45')+count('s_tum','Trennungsunterhalt, Monate',0,'voraussichtlich bis zur Scheidung, z. B. 12')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
+  +fs('Einkommen',money('s_br1','Bruttoeinkommen Ehegatte 1, jährlich',50000)+money('s_br2','Bruttoeinkommen Ehegatte 2, jährlich',25000,'gilt für Unterhalt und Versorgungsausgleich')
+     +chk('s_kist','Kirchensteuer (9 %)',false)+chk('s_kl','kinderlos (Pflegeversicherung)',false))
+  +fs('Unterhalt',count('s_tum','Trennungsunterhalt, Monate',0,'voraussichtlich bis zur Scheidung, z. B. 12')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
      +count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Versorgungsausgleich',select('s_vaa','Regelung',[['ausschluss','Ausschluss',1],['regelung','Regelung'],['kein','keine Regelung']])
-     +select('s_varg','Rentenversicherung',[['ost','Ost (Beitrittsgebiet)',1],['west','West']])+count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG, bis heute gerechnet')+vaEhegatte(1,'grv',50000)+vaEhegatte(2,'grv',25000))
+     +select('s_varg','Rentenversicherung',[['ost','Ost (Beitrittsgebiet)',1],['west','West']])+count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG, bis heute gerechnet')+vaEhegatte(1,'grv')+vaEhegatte(2,'grv'))
   +fs('Weitere Regelungen',money('s_sorge','Sorge- und Umgangsrecht',0,'§ 36 Abs. 2, 3: regelmäßig 5.000 €')+money('s_hr','Hausrat, Fahrzeuge',0))
   +`<div class="derived" id="s_der"></div>`
   +fs('Vollzug und Auslagen',chk('s_vollzug','Vollzugsgebühr Nr. 22110 (bei Grundbesitz)',true)+chk('s_xml','XML-Strukturdaten Nr. 22114',true)
      +count('s_seiten','Seiten Dokumentenpauschale',60)+count('s_gba','Grundbuchabrufe',1)),
  calc(){
   const vaKw=[1,2].map(i=>{const art=sel(`s_va${i}art`);
-    for(const f of ['br','kw']){const x=document.getElementById(`s_va${i}${f}`); if(x) x.closest('label').hidden=f==='br'?!['grv','beamt'].includes(art):art!=='kapital';}
-    return vaKapitalwert(art,val(`s_va${i}br`),val(`s_va${i}kw`),val('s_ehe'),sel('s_varg')==='ost');});
+    const x=document.getElementById(`s_va${i}kw`); if(x) x.closest('label').hidden=art!=='kapital';
+    return vaKapitalwert(art,val(`s_br${i}`),val(`s_va${i}kw`),val('s_ehe'),sel('s_varg')==='ost');});
   const va=sel('s_vaa')==='kein'?0:r2(vaKw.reduce((a,k)=>a+k.wert/2,0));
   const nuArt=sel('s_nua'), nuName=nuArt==='verzicht'?'Unterhaltsverzicht':'Nachehelicher Unterhalt';
-  const nu=r2(Math.abs(val('s_ek1')-val('s_ek2'))*0.45);
+  const bn=[1,2].map(i=>bereinigtesNetto(val(`s_br${i}`),sel(`s_va${i}art`)==='beamt',on('s_kl'),on('s_kist')));
+  const nu=r2(Math.abs(bn[0].bereinigt-bn[1].bereinigt)*0.45);
   const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
     ['Trennungsunterhalt',nu*val('s_tum')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
     ['Versorgungsausgleich',va],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
-  document.getElementById('s_der').textContent=(nu?`Unterhalt: (${eur(val('s_ek1'))} − ${eur(val('s_ek2'))}) × 0,45 = ${eur(nu)} monatlich\n`
+  document.getElementById('s_der').textContent=bn.map((b,i)=>val(`s_br${i+1}`)?`Ehegatte ${i+1}: Netto ${eur(b.netto)} mtl. (Steuern ${eur(r2(b.steuer/12))}, Sozialabgaben ${eur(r2(b.sv/12))}) − berufsbedingt ${eur(b.beruf)} = bereinigt ${eur(b.bereinigt)}\n`:'').join('')
+    +(nu?`Unterhalt: (${eur(bn[0].bereinigt)} − ${eur(bn[1].bereinigt)}) × 0,45 = ${eur(nu)} monatlich\n`
       +(val('s_tum')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tum'))} Monate\n`:'')
       +(nuArt!=='kein'?`${nuName}: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:''):'')
     +(va?vaKw.map((k,i)=>`Versorgung Ehegatte ${i+1}: ${k.text} = ${eur(k.wert)}, Hälfte ${eur(r2(k.wert/2))}\n`).join('')
