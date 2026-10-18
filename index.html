@@ -401,7 +401,7 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
 scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach Nr. 21100. Die einzelnen Regelungen sind verschiedene Gegenstände; ihre Werte werden addiert (§ 35 Abs. 1, § 111 Nr. 2).',
  form:()=>fs('Vermögen',money('s_grund','Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')+money('s_verm','Übriges Vermögen (ohne Grundbesitz)',0,'Wert der übrigen übertragenen Gegenstände bzw. Ausgleichszahlung; wird zum Grundbesitz addiert')
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
-  +fs('Unterhalt',money('s_ek1','Einkommen Ehegatte 1, monatlich netto',0)+money('s_ek2','Einkommen Ehegatte 2, monatlich netto',0,'nachehelicher Unterhalt = Differenz × 0,45')+count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)
+  +fs('Unterhalt',money('s_ek1','Einkommen Ehegatte 1, monatlich netto',0)+money('s_ek2','Einkommen Ehegatte 2, monatlich netto',0,'Unterhalt = Differenz × 0,45')+count('s_tum','Trennungsunterhalt, Monate',0,'voraussichtlich bis zur Scheidung, z. B. 12')+count('s_nuj','Nachehelicher Unterhalt, Jahre (unbestimmt: 10, § 52 Abs. 3)',10)
      +money('s_nuv','Unterhaltsverzicht, Wert',5000,'billiges Ermessen § 36 Abs. 1')+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Weitere Regelungen',money('s_va','Versorgungsausgleich (Ausschluss/Regelung)',5000,'§ 36 Abs. 1')+money('s_sorge','Sorge- und Umgangsrecht',0,'§ 36 Abs. 2, 3: regelmäßig 5.000 €')+money('s_hr','Hausrat, Fahrzeuge',0))
   +`<div class="derived" id="s_der"></div>`
@@ -410,10 +410,12 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
  calc(){
   const nu=r2(Math.abs(val('s_ek1')-val('s_ek2'))*0.45);
   const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
-    ['Nachehelicher Unterhalt',nu*12*val('s_nuj')],['Unterhaltsverzicht',val('s_nuv')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
+    ['Trennungsunterhalt',nu*val('s_tum')],['Nachehelicher Unterhalt',nu*12*val('s_nuj')],['Unterhaltsverzicht',val('s_nuv')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
     ['Versorgungsausgleich',val('s_va')],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
-  document.getElementById('s_der').textContent=(nu?`Nachehelicher Unterhalt: (${eur(val('s_ek1'))} − ${eur(val('s_ek2'))}) × 0,45 = ${eur(nu)} monatlich × 12 × ${num(val('s_nuj'))} Jahre\n`:'')
+  document.getElementById('s_der').textContent=(nu?`Unterhalt: (${eur(val('s_ek1'))} − ${eur(val('s_ek2'))}) × 0,45 = ${eur(nu)} monatlich\n`
+      +(val('s_tum')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tum'))} Monate\n`:'')
+      +`Nachehelicher Unterhalt: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:'')
     +(parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst');
   const P=[{sec:'Scheidungsvereinbarung'}],D=[],N=[]; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:`${parts.length} Gegenstände addiert`,wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
   const grund=val('s_grund')>0;
