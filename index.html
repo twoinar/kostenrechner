@@ -401,25 +401,27 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
 scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach Nr. 21100. Die einzelnen Regelungen sind verschiedene Gegenstände; ihre Werte werden addiert (§ 35 Abs. 1, § 111 Nr. 2).',
  form:()=>fs('Vermögen',money('s_grund','Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')+money('s_verm','Übriges Vermögen (ohne Grundbesitz)',0,'Wert der übrigen übertragenen Gegenstände bzw. Ausgleichszahlung; wird zum Grundbesitz addiert')
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
-  +fs('Unterhalt',money('s_nu','Nachehelicher Unterhalt, monatlich',0)+count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)
+  +fs('Unterhalt',money('s_ek1','Einkommen Ehegatte 1, monatlich netto',0)+money('s_ek2','Einkommen Ehegatte 2, monatlich netto',0,'nachehelicher Unterhalt = Differenz × 0,45')+count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)
      +money('s_nuv','Unterhaltsverzicht, Wert',5000,'billiges Ermessen § 36 Abs. 1')+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Weitere Regelungen',money('s_va','Versorgungsausgleich (Ausschluss/Regelung)',5000,'§ 36 Abs. 1')+money('s_sorge','Sorge- und Umgangsrecht',0,'§ 36 Abs. 2, 3: regelmäßig 5.000 €')+money('s_hr','Hausrat, Fahrzeuge',0))
   +`<div class="derived" id="s_der"></div>`
   +fs('Vollzug und Auslagen',chk('s_vollzug','Vollzugsgebühr Nr. 22110 (bei Grundbesitz)',true)+chk('s_xml','XML-Strukturdaten Nr. 22114',true)
      +count('s_seiten','Seiten Dokumentenpauschale',60)+count('s_gba','Grundbuchabrufe',1)),
  calc(){
+  const nu=r2(Math.abs(val('s_ek1')-val('s_ek2'))*0.45);
   const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
-    ['Nachehelicher Unterhalt',val('s_nu')*12*val('s_nuj')],['Unterhaltsverzicht',val('s_nuv')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
+    ['Nachehelicher Unterhalt',nu*12*val('s_nuj')],['Unterhaltsverzicht',val('s_nuv')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
     ['Versorgungsausgleich',val('s_va')],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
-  document.getElementById('s_der').textContent=parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst';
+  document.getElementById('s_der').textContent=(nu?`Nachehelicher Unterhalt: (${eur(val('s_ek1'))} − ${eur(val('s_ek2'))}) × 0,45 = ${eur(nu)} monatlich × 12 × ${num(val('s_nuj'))} Jahre\n`:'')
+    +(parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst');
   const P=[{sec:'Scheidungsvereinbarung'}],D=[],N=[]; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:`${parts.length} Gegenstände addiert`,wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
   const grund=val('s_grund')>0;
   if(on('s_vollzug')&&grund){u.push({kv:'22110',txt:'Vollzugsgebühr',wert:w,satz:.5,betrag:gebuehr(w,.5)});
     if(on('s_xml')) u.push({kv:'22114',txt:'XML-Strukturdaten',sub:'höchstens 250 €',wert:w,satz:.3,betrag:gebuehr(w,.3,{max:250})});}
   P.push(...u,...auslagen(u,'',val('s_seiten')));
   const gba=val('s_gba'); if(gba>0&&grund) D.push({kv:'32011',txt:'Grundbuchabruf',sub:`${gba} × 8 €`,betrag:gba*8});
-  if(val('s_nuv')>0&&val('s_nu')>0) N.push('Unterhaltsregelung und Unterhaltsverzicht sind beide erfasst. Bitte prüfen, ob sie denselben Anspruch betreffen.');
+  if(val('s_nuv')>0&&nu>0) N.push('Unterhaltsregelung und Unterhaltsverzicht sind beide erfasst. Bitte prüfen, ob sie denselben Anspruch betreffen.');
   N.push('Vollzugsgebühr wird aus dem gesamten Verfahrenswert berechnet (§ 112).');
   return {gw:`Geschäftswert ${eur(w)}`,P,D,N};}
 },
