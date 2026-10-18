@@ -79,6 +79,9 @@ td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
 td.n,th.n{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
 td.kv{font-family:var(--f-num);font-size:.8rem;color:var(--muted);white-space:nowrap}
 td .sub{display:block;color:var(--muted);font-size:.78rem}
+td .items{list-style:none;margin:2px 0;padding:0;color:var(--muted);font-size:.78rem}
+td .items li{display:flex;justify-content:space-between;gap:12px}
+td .items li span:last-child{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
 tr.sum td{border-bottom:0;padding-top:9px}
 tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weight:600;font-size:1rem;padding-top:10px}
 tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding-top:14px;border-bottom:0}
@@ -418,7 +421,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
       +(val('s_tum')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tum'))} Monate\n`:'')
       +(nuArt!=='kein'?`${nuName}: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:''):'')
     +(parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst');
-  const P=[{sec:'Scheidungsvereinbarung'}],D=[],N=[]; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:`${parts.length} Gegenstände addiert`,wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
+  const P=[{sec:'Scheidungsvereinbarung'}],D=[],N=[]; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:`${parts.length} Gegenstände addiert (§ 35 Abs. 1)`,items:parts,wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
   const grund=val('s_grund')>0;
   if(on('s_vollzug')&&grund){u.push({kv:'22110',txt:'Vollzugsgebühr',wert:w,satz:.5,betrag:gebuehr(w,.5)});
     if(on('s_xml')) u.push({kv:'22114',txt:'XML-Strukturdaten',sub:'höchstens 250 €',wert:w,satz:.3,betrag:gebuehr(w,.3,{max:250})});}
@@ -521,7 +524,7 @@ function run(){
   for(const p of r.P){
     if(p.sec){rows.push(`<tr class="sec"><td colspan="4">${p.sec}</td></tr>`);continue;}
     netto+=p.betrag;
-    rows.push(`<tr><td class="kv">${p.kv}</td><td>${p.txt}${p.sub?`<span class="sub">${p.sub}</span>`:''}${p.wert!=null?`<span class="sub">${satzTxt(p.satz)} aus ${eur(p.wert)}</span>`:''}</td><td class="n" colspan="2">${eur(p.betrag)}</td></tr>`);
+    rows.push(`<tr><td class="kv">${p.kv}</td><td>${p.txt}${p.sub?`<span class="sub">${p.sub}</span>`:''}${p.items?`<ul class="items">${p.items.map(([t,x])=>`<li><span>${t}</span><span>${eur(x)}</span></li>`).join('')}</ul>`:''}${p.wert!=null?`<span class="sub">${satzTxt(p.satz)} aus ${eur(p.wert)}</span>`:''}</td><td class="n" colspan="2">${eur(p.betrag)}</td></tr>`);
   }
   netto=r2(netto); const ust=r2(netto*.19); const durch=r2(r.D.reduce((a,d)=>a+d.betrag,0)); const total=r2(netto+ust+durch);
   rows.push(`<tr class="sum"><td></td><td>Zwischensumme netto</td><td class="n" colspan="2">${eur(netto)}</td></tr>`);
@@ -532,7 +535,8 @@ function run(){
   document.getElementById('bill').innerHTML=`<thead><tr><th>KV</th><th>Position</th><th class="n" colspan="2">Betrag</th></tr></thead><tbody>${rows.join('')}</tbody>`;
   document.getElementById('gw').textContent=r.gw;
   const n=document.getElementById('notes'); n.hidden=!r.N.length; n.innerHTML=r.N.length?`<ul>${r.N.map(x=>`<li>${x}</li>`).join('')}</ul>`:'';
-  last.text=[`Kostenberechnung ${m.titel}`,r.gw,''].concat(r.P.filter(p=>!p.sec).map(p=>`Nr. ${p.kv}  ${p.txt}${p.wert!=null?` (${satzTxt(p.satz)} aus ${eur(p.wert)})`:''}: ${eur(p.betrag)}`))
+  last.text=[`Kostenberechnung ${m.titel}`,r.gw,''].concat(r.P.filter(p=>!p.sec).map(p=>`Nr. ${p.kv}  ${p.txt}${p.wert!=null?` (${satzTxt(p.satz)} aus ${eur(p.wert)})`:''}: ${eur(p.betrag)}`
+    +(p.items?p.items.map(([t,x])=>`\n      ${t}: ${eur(x)}`).join(''):'')))
     .concat([`Zwischensumme netto: ${eur(netto)}`,`USt 19 %: ${eur(ust)}`]).concat(r.D.map(d=>`${d.txt}: ${eur(d.betrag)}`)).concat([`Gesamtbetrag: ${eur(total)}`]).join('\n');
 }
 document.getElementById('form').addEventListener('input',run);
