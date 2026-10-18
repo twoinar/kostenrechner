@@ -463,7 +463,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
   +fs('Einkommen',money('s_bm1','Bruttoeinkommen Ehegatte 1, monatlich',4000,'× 12; gilt für Unterhalt und Versorgungsausgleich')+count('s_ki1','Kinder Ehegatte 1',0,'für Pflegeversicherung, Soli und Kirchensteuer')+chk('s_kist1','Kirchensteuer (9 %)',false)
      +money('s_bm2','Bruttoeinkommen Ehegatte 2, monatlich',2000)+count('s_ki2','Kinder Ehegatte 2',0)+chk('s_kist2','Kirchensteuer (9 %)',false))
-  +fs('Unterhalt',count('s_tum','Trennungsunterhalt, Monate',0,'voraussichtlich bis zur Scheidung, z. B. 12')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
+  +fs('Unterhalt',count('s_tm','Trennungsunterhalt, Monate',24,'Vorgabe 24 Monate, anpassbar')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
      +count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Versorgungsausgleich',select('s_vaa','Regelung',[['ausschluss','Ausschluss',1],['regelung','Regelung'],['kein','keine Regelung']])
      +select('s_varg','Rentenversicherung',[['ost','Ost (Beitrittsgebiet)',1],['west','West']])+count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG, bis heute gerechnet')+vaEhegatte(1,'grv')+vaEhegatte(2,'grv'))
@@ -480,12 +480,12 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   const bn=[1,2].map(i=>bereinigtesNetto(val(`s_bm${i}`)*12,sel(`s_va${i}art`)==='beamt',Math.max(0,Math.floor(val(`s_ki${i}`))),on(`s_kist${i}`)));
   const nu=r2(Math.abs(bn[0].bereinigt-bn[1].bereinigt)*0.45);
   const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
-    ['Trennungsunterhalt',nu*val('s_tum')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
+    ['Trennungsunterhalt',nu*val('s_tm')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
     ['Versorgungsausgleich',va],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
   document.getElementById('s_der').textContent=bn.map((b,i)=>val(`s_bm${i+1}`)?`Ehegatte ${i+1}: Netto ${eur(b.netto)} mtl. (Steuern ${eur(r2(b.steuer/12))}, Sozialabgaben ${eur(r2(b.sv/12))}) − berufsbedingt ${eur(b.beruf)} = bereinigt ${eur(b.bereinigt)}\n`:'').join('')
     +(nu?`Unterhalt: (${eur(bn[0].bereinigt)} − ${eur(bn[1].bereinigt)}) × 0,45 = ${eur(nu)} monatlich\n`
-      +(val('s_tum')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tum'))} Monate\n`:'')
+      +(val('s_tm')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tm'))} Monate\n`:'')
       +(nuArt!=='kein'?`${nuName}: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:''):'')
     +(va?vaKw.map((k,i)=>`Versorgung Ehegatte ${i+1}: ${k.text} = ${eur(k.wert)}, Hälfte ${eur(r2(k.wert/2))}\n`).join('')
       +`Versorgungsausgleich: Summe der Hälften ${eur(va)}\n`:'')
