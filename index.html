@@ -141,6 +141,8 @@ tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:v
 </div>
 
 <script>
+/* Jahr der eingetragenen Rechenwerte; bei jeder Jahresaktualisierung erhöhen */
+const RECHENSTAND=2026;
 /* ---------- Tabelle B ---------- */
 const BANDS=[[2000,500,4],[10000,1000,6],[25000,3000,8],[50000,5000,10],[200000,15000,27],[500000,30000,50],
   [5000000,50000,80],[10000000,200000,130],[20000000,250000,150],[30000000,500000,280],[60000000,1000000,120]];
@@ -635,6 +637,7 @@ function show(k){cur=k;
   run();}
 function run(){
   const m=M[cur]; const r=m.calc(); last=r;
+  if(new Date().getFullYear()>RECHENSTAND) r.N.unshift(`Rechenwerte mit Stand ${RECHENSTAND} (Steuer, Sozialversicherung, Düsseldorfer Tabelle, Versorgungsausgleich). Bitte auf Aktualisierung prüfen.`);
   const rows=[]; let netto=0;
   for(const p of r.P){
     if(p.sec){rows.push(`<tr class="sec"><td colspan="4">${p.sec}</td></tr>`);continue;}
