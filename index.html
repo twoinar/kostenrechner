@@ -87,6 +87,22 @@ tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:v
 .notes li+li{margin-top:4px}
 .copy{margin-top:14px;font:inherit;font-weight:500;background:transparent;border:1px solid var(--accent);color:var(--accent);padding:7px 14px;border-radius:6px;cursor:pointer}
 .foot{margin-top:28px;color:var(--muted);font-size:.8rem;max-width:90ch}
+.baum{margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:8px;background:var(--bg);grid-column:1/-1}
+.baum .eltern{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding-bottom:12px;margin-bottom:12px;border-bottom:2px solid var(--line)}
+.baum .eltern select{width:auto}
+.baum .person{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.baum .erblasser{font-weight:600;background:var(--accent-soft);border-color:var(--accent)}
+.baum .kinder{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:start}
+.baum .kind.tot{border-style:dashed;background:transparent}
+.baum .kopfzeile{display:flex;gap:4px;align-items:center}
+.baum .kopfzeile input{flex:1;min-width:0;font-family:var(--f-body)}
+.baum .weg{border:0;background:transparent;color:var(--muted);font-size:1.2rem;line-height:1;cursor:pointer;padding:2px 4px}
+.baum .rollen{display:flex;gap:4px;flex-wrap:wrap}
+.baum .rollen button{font:inherit;font-size:.78rem;padding:3px 8px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink);cursor:pointer}
+.baum .rollen button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.baum .quote{font-family:var(--f-num);font-size:.78rem;color:var(--muted)}
+.baum .enkel{display:flex;flex-direction:column;gap:6px;padding-left:8px;border-left:2px solid var(--line)}
+.baum .neu{font:inherit;font-size:.85rem;border:1px dashed var(--accent);color:var(--accent);background:transparent;border-radius:8px;padding:8px;cursor:pointer}
 .lookup{font-family:var(--f-num);font-size:1.6rem;margin-top:14px}
 </style>
 
@@ -158,21 +174,95 @@ const nutzungsfaktor=alter=>alter<=30?20:alter<=50?15:alter<=70?10:5;
 const ggt=(a,b)=>b?ggt(b,a%b):a;
 const bruch=(z,n)=>{const g=ggt(z,n);return [z/g,n/g];};
 const btxt=([z,n])=>`${z}/${n}`;
+const bruchPlus=([a,b],[c,d])=>bruch(a*d+c*b,b*d);
+// Erbteil des Ehegatten neben Abkömmlingen; staemme = Zahl der Kinder bzw. Stämme
+function ehegattenQuote(stand,staemme){
+  if(stand==='zugewinn') return [1,2];
+  if(stand==='trennung') return staemme===1?[1,2]:staemme===2?[1,3]:[1,4];
+  if(stand==='gemeinschaft') return [1,4];
+  return [0,1];
+}
 function erbspiegel(stand,kinder){
-  let e=[0,1];
-  if(stand==='zugewinn') e=[1,2];
-  else if(stand==='trennung') e=kinder===1?[1,2]:kinder===2?[1,3]:[1,4];
-  else if(stand==='gemeinschaft') e=[1,4];
+  const e=ehegattenQuote(stand,kinder);
   const kind=bruch(e[1]-e[0],e[1]*kinder);
   return {ehegatte:e,kind,pflichtteil:bruch(kind[0],kind[1]*2)};
 }
+
+/* Gezeichneter Erbspiegel je Übergeber. Ein vorverstorbenes Kind bildet mit seinen Enkeln
+   einen Stamm; ohne Enkel fällt es weg. Übergeber 2 übernimmt beim ersten Einschalten die Kinder von Übergeber 1. */
+const BAUM={};
+const kindNeu=rolle=>({name:'',rolle,tot:false,enkel:[]});
+function baum(i){
+  if(!BAUM[i]) BAUM[i]=i==2&&BAUM[1]?JSON.parse(JSON.stringify(BAUM[1]))
+    :{ehegatte:true,stand:'zugewinn',kinder:[kindNeu('uebernehmer'),kindNeu('verzicht'),kindNeu('verzicht')]};
+  return BAUM[i];
+}
+function baumQuoten(b){
+  const S=b.kinder.filter(k=>!k.tot||k.enkel.length).length, personen={};
+  const e=b.ehegatte?ehegattenQuote(b.stand,S||1):[0,1];
+  if(S) b.kinder.forEach((k,ki)=>{
+    const nimm=(schluessel,erb,rolle,name)=>{personen[schluessel]={erb,pt:bruch(erb[0],erb[1]*2),rolle,name};};
+    if(!k.tot) nimm(ki,bruch(e[1]-e[0],e[1]*S),k.rolle,k.name||`Kind ${ki+1}`);
+    else k.enkel.forEach((n,ni)=>nimm(`${ki}.${ni}`,bruch(e[1]-e[0],e[1]*S*k.enkel.length),n.rolle,n.name||`Enkel ${ni+1} von Kind ${ki+1}`));
+  });
+  return {ehegatte:b.ehegatte?e:null,personen,S};
+}
+const escHtml=x=>String(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+function baumZeichnen(i){
+  const el=document.getElementById(`u${i}_baum`); if(!el) return;
+  const b=baum(i), q=baumQuoten(b);
+  const rollen=(pfad,r)=>`<div class="rollen">${[['uebernehmer','Übernehmer'],['verzicht','verzichtet'],['keine','–']]
+    .map(([v,t])=>`<button type="button" data-baum="${i}" data-pfad="${pfad}" data-rolle="${v}" aria-pressed="${r===v}">${t}</button>`).join('')}</div>`;
+  const quote=x=>x?`<span class="quote">Erbteil ${btxt(x.erb)} · Pflichtteil ${btxt(x.pt)}</span>`:'';
+  const kopf=(pfad,name,platzhalter)=>`<div class="kopfzeile"><input type="text" placeholder="${platzhalter}" value="${escHtml(name)}" data-baum="${i}" data-pfad="${pfad}" data-feld="name">`
+    +`<button type="button" class="weg" data-baum="${i}" data-pfad="${pfad}" data-aktion="weg" aria-label="Entfernen">×</button></div>`;
+  el.innerHTML=`<div class="eltern"><div class="person erblasser">Übergeber ${i}</div>`
+    +`<label class="check"><input type="checkbox" data-baum="${i}" data-feld="ehegatte" ${b.ehegatte?'checked':''}>Ehegatte</label>`
+    +(b.ehegatte?`<select data-baum="${i}" data-feld="stand">${[['zugewinn','Zugewinngemeinschaft'],['trennung','Gütertrennung'],['gemeinschaft','Gütergemeinschaft']]
+      .map(([v,t])=>`<option value="${v}" ${b.stand===v?'selected':''}>${t}</option>`).join('')}</select>`
+      +(q.S?`<span class="quote">Erbteil ${btxt(q.ehegatte)}</span>`:''):'')
+    +`</div><div class="kinder">`
+    +b.kinder.map((k,ki)=>`<div class="person kind${k.tot?' tot':''}">${kopf(ki,k.name,`Kind ${ki+1}`)}`
+      +`<label class="check"><input type="checkbox" data-baum="${i}" data-pfad="${ki}" data-feld="tot" ${k.tot?'checked':''}>vorverstorben</label>`
+      +(k.tot?`<div class="enkel">${k.enkel.map((n,ni)=>`<div class="person">${kopf(`${ki}.${ni}`,n.name,`Enkel ${ni+1}`)}${rollen(`${ki}.${ni}`,n.rolle)}${quote(q.personen[`${ki}.${ni}`])}</div>`).join('')}`
+          +`<button type="button" class="neu" data-baum="${i}" data-pfad="${ki}" data-aktion="enkel">+ Enkel</button>`
+          +(k.enkel.length?'':'<span class="quote">ohne Abkömmlinge: fällt weg</span>')+`</div>`
+        :rollen(ki,k.rolle)+quote(q.personen[ki]))
+      +`</div>`).join('')
+    +`<button type="button" class="neu" data-baum="${i}" data-aktion="kind">+ Kind</button></div>`;
+}
+// Läuft in der Capture-Phase, also bevor das Formular neu rechnet
+function baumEreignis(e){
+  const t=e.target.closest&&e.target.closest('[data-baum]'); if(!t) return;
+  const i=t.dataset.baum, b=baum(i), pfad=(t.dataset.pfad||'').split('.').filter(x=>x!=='').map(Number);
+  const person=pfad.length===2?b.kinder[pfad[0]].enkel[pfad[1]]:pfad.length===1?b.kinder[pfad[0]]:null;
+  if(e.type==='input'){ if(t.dataset.feld==='name'&&person) person.name=t.value; return; }
+  if(e.type==='click'){
+    const a=t.dataset.aktion;
+    if(t.dataset.rolle) person.rolle=t.dataset.rolle;
+    else if(a==='kind') b.kinder.push(kindNeu('verzicht'));
+    else if(a==='enkel') person.enkel.push({name:'',rolle:'verzicht'});
+    else if(a==='weg'){ if(pfad.length===2) b.kinder[pfad[0]].enkel.splice(pfad[1],1); else b.kinder.splice(pfad[0],1); }
+    else return;
+    baumZeichnen(i); run(); return;
+  }
+  const f=t.dataset.feld;
+  if(f==='ehegatte') b.ehegatte=t.checked;
+  else if(f==='stand') b.stand=t.value;
+  else if(f==='tot'){ person.tot=t.checked; if(person.tot&&!person.enkel.length) person.enkel.push({name:'',rolle:'verzicht'}); }
+  else return;
+  baumZeichnen(i);
+}
+for(const typ of ['click','change','input']) document.addEventListener(typ,baumEreignis,true);
 function uebergeber(i,anteil){
   return count(`u${i}_anteil`,'Anteil am übertragenen Vermögen in %',anteil)
+    +select(`u${i}_modus`,'Eingabe',[['baum','Erbspiegel zeichnen',1],['zahl','Familienstand und Kinderzahl']])
     +select(`u${i}_stand`,'Familienstand',[['zugewinn','verheiratet, Zugewinngemeinschaft',1],['trennung','verheiratet, Gütertrennung'],
       ['gemeinschaft','verheiratet, Gütergemeinschaft'],['allein','ledig, geschieden oder verwitwet']])
     +count(`u${i}_kinder`,'Kinder insgesamt',3,'mit Übernehmer; vorverstorbene mit Abkömmlingen zählen mit')
     +count(`u${i}_verz`,'davon verzichtend',2)
-    +money(`u${i}_rv`,'Reinvermögen (nur bei umfassendem Verzicht)',0,'§ 102 Abs. 1: Schulden höchstens bis zur Hälfte abziehen');
+    +money(`u${i}_rv`,'Reinvermögen (nur bei umfassendem Verzicht)',0,'§ 102 Abs. 1: Schulden höchstens bis zur Hälfte abziehen')
+    +`<div class="baum" id="u${i}_baum"></div>`;
 }
 
 /* ---------- Geschäfte ---------- */
@@ -232,6 +322,12 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
   // Pflichtteilsverzicht (§ 102 Abs. 4): Pflichtteilsquote je Verzichtendem; beschränkt auf das Übertragene
   // zählt nur der reine Schenkungswert (Verkehrswert abzüglich vorbehaltener und übernommener Leistungen);
   // das Rückforderungsrecht zählt dabei nicht mit, es wirkt nur auf den Wert der Überlassung
+  for(const i of [1,2]){
+    const baumModus=sel(`u${i}_modus`)==='baum', sichtbar=i===1||on('u2_an');
+    for(const f of ['stand','kinder','verz']){const x=document.getElementById(`u${i}_${f}`); if(x) x.closest('label').hidden=baumModus;}
+    const bel=document.getElementById(`u${i}_baum`);
+    if(bel){bel.hidden=!baumModus||!sichtbar; if(baumModus&&sichtbar&&!bel.innerHTML) baumZeichnen(i);}
+  }
   const glSchenkung=gl-rueck, art=sel('u_pv'), sw=Math.max(0,vw-glSchenkung), zeilen=[];
   let ptv=0, anteile=0;
   if(art!=='kein'){
@@ -239,22 +335,34 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
       +(rueck?' (ohne Rückforderungsrecht)':'')+` = ${eur(sw)}`);
     for(const i of [1,2]){
       if(i===2&&!on('u2_an')) continue;
-      const kinder=Math.max(0,Math.floor(val(`u${i}_kinder`))), verz=Math.min(kinder,Math.max(0,Math.floor(val(`u${i}_verz`))));
       const anteil=Math.min(100,Math.max(0,val(`u${i}_anteil`))); anteile+=anteil;
+      const bezug=art==='beschr'?r2(sw*anteil/100):val(`u${i}_rv`);
+      if(art==='umfassend'&&!bezug) N.push(`Übergeber ${i}: Bitte das Reinvermögen für den umfassenden Verzicht eintragen.`);
+      if(sel(`u${i}_modus`)==='baum'){
+        const q=baumQuoten(baum(i)), alle=Object.values(q.personen), verz=alle.filter(x=>x.rolle==='verzicht');
+        zeilen.push(`Übergeber ${i}: `+(q.S?(q.ehegatte?`Ehegatte ${btxt(q.ehegatte)} · `:'')
+          +alle.map(x=>`${x.name}${x.rolle==='uebernehmer'?' (Übernehmer)':x.rolle==='verzicht'?' (verzichtet)':''} ${btxt(x.erb)}`).join(' · ')
+          :'keine Abkömmlinge'));
+        if(!verz.length){zeilen.push(`Übergeber ${i}: kein Verzichtender`);continue;}
+        const summe=verz.reduce((s,x)=>bruchPlus(s,x.pt),[0,1]);
+        const wert=r2(bezug*summe[0]/summe[1]); ptv+=wert;
+        zeilen.push(`Verzicht: Pflichtteile ${verz.map(x=>btxt(x.pt)).join(' + ')}${verz.length>1?` = ${btxt(summe)}`:''} × ${eur(bezug)} = ${eur(wert)}`);
+        continue;
+      }
+      const kinder=Math.max(0,Math.floor(val(`u${i}_kinder`))), verz=Math.min(kinder,Math.max(0,Math.floor(val(`u${i}_verz`))));
       if(!kinder||!verz){zeilen.push(`Übergeber ${i}: kein Verzichtender`);continue;}
       const es=erbspiegel(sel(`u${i}_stand`),kinder);
-      const bezug=art==='beschr'?r2(sw*anteil/100):val(`u${i}_rv`);
       const wert=r2(bezug*verz*es.pflichtteil[0]/es.pflichtteil[1]);
       ptv+=wert;
       zeilen.push(`Übergeber ${i}: ${es.ehegatte[0]?`Ehegatte ${btxt(es.ehegatte)}, `:''}Kinder je ${btxt(es.kind)}, Pflichtteil je ${btxt(es.pflichtteil)} · `
         +`${verz} × ${btxt(es.pflichtteil)} × ${eur(bezug)} = ${eur(wert)}`);
-      if(art==='umfassend'&&!bezug) N.push(`Übergeber ${i}: Bitte das Reinvermögen für den umfassenden Verzicht eintragen.`);
     }
     ptv=r2(ptv);
     const abf=val('u_abf');
     if(abf>ptv){zeilen.push(`Abfindung ${eur(abf)} ist höher als der Verzichtswert und gilt (§ 97 Abs. 3)`);ptv=abf;}
     if(art==='beschr'&&Math.abs(anteile-100)>0.01) N.push(`Die Anteile der Übergeber ergeben ${num(anteile)} %, nicht 100 %.`);
-    if([1,2].some(i=>(i===1||on('u2_an'))&&sel(`u${i}_stand`)==='zugewinn')) N.push('Pflichtteil bei Zugewinngemeinschaft nach der erbrechtlichen Lösung (Ehegatte 1/2).');
+    if([1,2].some(i=>(i===1||on('u2_an'))&&(sel(`u${i}_modus`)==='baum'?baum(i).ehegatte&&baum(i).stand==='zugewinn':sel(`u${i}_stand`)==='zugewinn')))
+      N.push('Pflichtteil bei Zugewinngemeinschaft nach der erbrechtlichen Lösung (Ehegatte 1/2).');
   }
   document.getElementById('u_pt').textContent=art==='kein'?'Kein Pflichtteilsverzicht':zeilen.join('\n')+`\nPflichtteilsverzicht gesamt ${eur(ptv)}`;
   const w=haupt+ptv; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:ptv?`${eur(haupt)} + Pflichtteilsverzicht ${eur(ptv)}`:'',wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
