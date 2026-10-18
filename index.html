@@ -173,10 +173,18 @@ const reinvermoegen=(a,p)=>Math.max(a-p,a/2);
 
 /* Versorgungsausgleich: Rechengrößen 2026 (VersAusglUmrFaktorBek 2026, SGB VI). Jährlich anpassen. */
 const VA={epBeitrag:9661.584,durchschnitt:51944,bbg:101400,rentenwert:42.52,beamtSatz:0.0179375,beamtMax:0.7175};
-// Barkapitalwert der in der Ehezeit erworbenen Anwartschaft eines Ehegatten
-function vaKapitalwert(art,brutto,kw,jahre){
-  if(art==='grv'){const ep=Math.min(brutto,VA.bbg)/VA.durchschnitt*jahre;
-    return {wert:r2(ep*VA.epBeitrag),text:`${num(Math.round(ep*10000)/10000)} Entgeltpunkte × ${num(VA.epBeitrag)} €`};}
+// Hochwertung der Ost-Entgelte (Anlage 10 SGB VI); ab 2025 einheitlich
+const OST={1991:1.7235,1992:1.4393,1993:1.3197,1994:1.2687,1995:1.2317,1996:1.2209,1997:1.2089,1998:1.2113,1999:1.2054,2000:1.2030,
+  2001:1.2003,2002:1.1972,2003:1.1943,2004:1.1932,2005:1.1827,2006:1.1827,2007:1.1841,2008:1.1857,2009:1.1712,2010:1.1726,2011:1.1740,
+  2012:1.1785,2013:1.1762,2014:1.1665,2015:1.1502,2016:1.1415,2017:1.1374,2018:1.1339,2019:1.0840,2020:1.0700,2021:1.0560,2022:1.0420,
+  2023:1.0280,2024:1.0140};
+// Barkapitalwert der in der Ehezeit erworbenen Anwartschaft eines Ehegatten. Die Ehezeit wird vom laufenden Jahr
+// rückwärts gezählt; Ost-Entgelte werden je Jahr hochgewertet und erst danach an der Bemessungsgrenze gekappt.
+function vaKapitalwert(art,brutto,kw,jahre,ost){
+  if(art==='grv'){let ep=0; const jetzt=new Date().getFullYear();
+    for(let k=0;k<jahre;k++){const f=ost?(OST[jetzt-k]||(jetzt-k<1991?OST[1991]:1)):1; ep+=Math.min(1,jahre-k)*Math.min(brutto*f,VA.bbg)/VA.durchschnitt;}
+    const hw=ost&&jahre>0&&brutto>0?` (Ost, hochgewertet im Mittel × ${num(Math.round(ep*VA.durchschnitt/jahre/Math.min(brutto,VA.bbg)*10000)/10000)})`:'';
+    return {wert:r2(ep*VA.epBeitrag),text:`${num(Math.round(ep*10000)/10000)} Entgeltpunkte${hw} × ${num(VA.epBeitrag)} €`};}
   if(art==='beamt'){const rente=brutto/12*Math.min(VA.beamtMax,VA.beamtSatz*jahre), ep=rente/VA.rentenwert;
     return {wert:r2(ep*VA.epBeitrag),text:`Ruhegehalt ${eur(r2(rente))} mtl. ÷ Rentenwert ${num(VA.rentenwert)} € × ${num(VA.epBeitrag)} €`};}
   if(art==='kapital') return {wert:kw,text:'laut Auskunft des Versorgungsträgers'};
@@ -425,7 +433,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   +fs('Unterhalt',money('s_ek1','Einkommen Ehegatte 1, monatlich netto',0)+money('s_ek2','Einkommen Ehegatte 2, monatlich netto',0,'Unterhalt = Differenz × 0,45')+count('s_tum','Trennungsunterhalt, Monate',0,'voraussichtlich bis zur Scheidung, z. B. 12')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
      +count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Versorgungsausgleich',select('s_vaa','Regelung',[['ausschluss','Ausschluss',1],['regelung','Regelung'],['kein','keine Regelung']])
-     +count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG')+vaEhegatte(1,'grv',50000)+vaEhegatte(2,'grv',25000))
+     +select('s_varg','Rentenversicherung',[['ost','Ost (Beitrittsgebiet)',1],['west','West']])+count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG, bis heute gerechnet')+vaEhegatte(1,'grv',50000)+vaEhegatte(2,'grv',25000))
   +fs('Weitere Regelungen',money('s_sorge','Sorge- und Umgangsrecht',0,'§ 36 Abs. 2, 3: regelmäßig 5.000 €')+money('s_hr','Hausrat, Fahrzeuge',0))
   +`<div class="derived" id="s_der"></div>`
   +fs('Vollzug und Auslagen',chk('s_vollzug','Vollzugsgebühr Nr. 22110 (bei Grundbesitz)',true)+chk('s_xml','XML-Strukturdaten Nr. 22114',true)
@@ -433,7 +441,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
  calc(){
   const vaKw=[1,2].map(i=>{const art=sel(`s_va${i}art`);
     for(const f of ['br','kw']){const x=document.getElementById(`s_va${i}${f}`); if(x) x.closest('label').hidden=f==='br'?!['grv','beamt'].includes(art):art!=='kapital';}
-    return vaKapitalwert(art,val(`s_va${i}br`),val(`s_va${i}kw`),val('s_ehe'));});
+    return vaKapitalwert(art,val(`s_va${i}br`),val(`s_va${i}kw`),val('s_ehe'),sel('s_varg')==='ost');});
   const va=sel('s_vaa')==='kein'?0:r2(vaKw.reduce((a,k)=>a+k.wert/2,0));
   const nuArt=sel('s_nua'), nuName=nuArt==='verzicht'?'Unterhaltsverzicht':'Nachehelicher Unterhalt';
   const nu=r2(Math.abs(val('s_ek1')-val('s_ek2'))*0.45);
