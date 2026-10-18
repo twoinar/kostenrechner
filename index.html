@@ -517,8 +517,10 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   const zahler=sel('s_kbei')==='1'?1:0, kEink=bn[zahler].bereinigt;
   const ku=Array.from({length:kinderZahl()},(_,k)=>{const a=val(`s_kua${k}`), eig=val(`s_kum${k}`);
     return {alter:a,jahre:kindJahre(a),zahl:eig||dtZahl(kEink,a),eigen:!!eig};});
-  const kuSumme=r2(ku.reduce((x,k)=>x+k.zahl,0)), ehe=bn.map((b,i)=>r2(b.bereinigt-(i===zahler?kuSumme:0)));
-  const nu=r2(Math.max(0,Math.abs(ehe[0]-ehe[1]))*0.45);
+  // Ehegattenunterhalt nach den Leitlinien (z. B. OLG Brandenburg Nr. 15.2): erst 1/10 Erwerbstätigenbonus,
+  // dann Kindesunterhalt abziehen, dann Halbteilung. Ohne Kinder entspricht das 0,45 × Differenz.
+  const kuSumme=r2(ku.reduce((x,k)=>x+k.zahl,0)), ehe=bn.map((b,i)=>r2(b.bereinigt*0.9-(i===zahler?kuSumme:0)));
+  const nu=r2(Math.abs(ehe[0]-ehe[1])/2);
   // Austausch (§ 97 Abs. 3): übertragenes Vermögen gegen Gegenleistungen, maßgeblich ist der höhere Wert
   const leist=val('s_grund')+val('s_verm'), gegen=val('s_glv')+val('s_glz'), verm=Math.max(leist,gegen);
   const parts=[[gegen>leist?'Vermögensauseinandersetzung (Gegenleistungen)':'Vermögensauseinandersetzung',verm],['Gütertrennung',val('s_gt')],
@@ -528,7 +530,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   const w=parts.reduce((a,p)=>a+p[1],0);
   document.getElementById('s_der').textContent=(gegen?`Vermögen: übertragen ${eur(leist)} ⟷ Gegenleistungen ${eur(gegen)} (Verbindlichkeiten ${eur(val('s_glv'))}, Zahlungen ${eur(val('s_glz'))}) · maßgeblich ${eur(verm)}\n`:'')
     +bn.map((b,i)=>val(`s_bm${i+1}`)?`Ehegatte ${i+1}: Netto ${eur(b.netto)} mtl. (Steuern ${eur(r2(b.steuer/12))}, Sozialabgaben ${eur(r2(b.sv/12))}) − berufsbedingt ${eur(b.beruf)} = bereinigt ${eur(b.bereinigt)}\n`:'').join('')
-    +(nu?`Unterhalt: (${eur(ehe[0])} − ${eur(ehe[1])})${kuSumme?` nach Abzug Kindesunterhalt ${eur(kuSumme)}`:''} × 0,45 = ${eur(nu)} monatlich\n`
+    +(nu?`Unterhalt: (${eur(ehe[0])} − ${eur(ehe[1])}) ÷ 2 = ${eur(nu)} monatlich (bereinigt × 9/10${kuSumme?`, abzüglich Kindesunterhalt ${eur(kuSumme)} bei Ehegatte ${zahler+1}`:''})\n`
       +(val('s_tm')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tm'))} Monate\n`:'')
       +(nuArt!=='kein'?`${nuName}: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:''):'')
     +(ku.length?`Kindesunterhalt: Düsseldorfer Tabelle 2026 (OLG ${sel('s_olg')}), Gruppe ${dtGruppe(kEink)+1} nach ${eur(kEink)} von Ehegatte ${zahler+1}\n`:'')
