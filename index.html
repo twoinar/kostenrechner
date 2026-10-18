@@ -673,6 +673,7 @@ function show(k){cur=k;
   wiederherstellen();
   document.getElementById('billName').textContent=m.name;
   try{localStorage.setItem('gnotkg-tab',k)}catch(e){}
+  if(location.hash&&location.hash!=='#'+k) history.replaceState(null,'','#'+k);
   run();}
 function run(){
   const m=M[cur]; const r=m.calc(); last=r;
@@ -695,6 +696,8 @@ function run(){
   last.text=[`Kostenberechnung ${m.titel}`,r.gw,''].concat(r.P.filter(p=>!p.sec).map(p=>`Nr. ${p.kv}  ${p.txt}${p.wert!=null?` (${satzTxt(p.satz)} aus ${eur(p.wert)})`:''}: ${eur(p.betrag)}`
     +(p.items?p.items.map(([t,x])=>`\n      ${t}: ${eur(x)}`).join(''):'')))
     .concat([`Zwischensumme netto: ${eur(netto)}`,`USt 19 %: ${eur(ust)}`]).concat(r.D.map(d=>`${d.txt}: ${eur(d.betrag)}`)).concat([`Gesamtbetrag: ${eur(total)}`]).join('\n');
+  // Eingebettet (z. B. im Vorgesprächsbogen): Ergebnis an die einbettende Seite melden
+  if(eingebettet) parent.postMessage({typ:'gnotkg-kosten',reiter:cur,titel:m.titel,gw:r.gw,netto,ust,durchlaufend:durch,gesamt:total,text:last.text},'*');
 }
 /* Eingaben bleiben im Browser gespeichert (nur auf diesem Gerät), damit Beispiele nicht neu erfasst werden müssen */
 const SPEICHER='gnotkg-eingaben';
@@ -737,8 +740,39 @@ document.getElementById('form').addEventListener('focusout',e=>{if(e.target.matc
 document.getElementById('copy').addEventListener('click',async e=>{const b=e.currentTarget;
   try{await navigator.clipboard.writeText(last.text);b.textContent='Kopiert';}catch(err){b.textContent='Kopieren nicht möglich';}
   setTimeout(()=>b.textContent='Als Text kopieren',1600);});
+/* Vorbelegung über die Adresse, z. B. #scheidung?s_grund=180000&s_bm1=4000 (etwa aus dem Vorgesprächsbogen).
+   Die übergebenen Werte ersetzen die gespeicherten Eingaben dieses Reiters; nicht übergebene Felder stehen wieder
+   auf der Vorgabe. Danach wird die Adresse auf #reiter gekürzt, damit ein Neuladen spätere Änderungen nicht überschreibt.
+   Mit einbetten=1 meldet der Rechner jedes Ergebnis per postMessage an die einbettende Seite. */
+const FELDER={kauf:/^k_/,uebertragung:/^u\d?_/,scheidung:/^s_/,ehevertrag:/^e_/,testament:/^t_/,vollmacht:/^v_/,tabelle:/^x_/};
+const NEIN=['','0','false','nein','off'];
+function ausAdresse(){
+  const m=/^#([a-z]+)(?:\?(.*))?$/.exec(location.hash); if(!m||!M[m[1]]) return null;
+  const k=m[1], p=new URLSearchParams(m[2]||'');
+  if(p.has('einbetten')){ eingebettet=window.parent!==window; p.delete('einbetten'); }
+  const werte=[...p].filter(([id])=>FELDER[k].test(id)&&/^[a-z0-9_]+$/.test(id));
+  if(werte.length){
+    const probe=document.createElement('div'); probe.innerHTML=M[k].form();
+    const d=gespeichert();
+    for(const id of Object.keys(d)) if(FELDER[k].test(id)) delete d[id];
+    if(k==='uebertragung'){ delete d._baum; for(const i in BAUM) delete BAUM[i]; }
+    let posten=0;
+    for(const [id,v] of werte){
+      const el=probe.querySelector('#'+id);
+      if(el&&el.type==='checkbox') d[id]=!NEIN.includes(v.trim().toLowerCase());
+      else d[id]=el?.matches('[data-money]')||/^s_(kum|pw)\d+$/.test(id)?(v.trim()?num(parse(v)):''):v;
+      const pt=/^s_p[tw](\d+)$/.exec(id); if(pt) posten=Math.max(posten,+pt[1]+1);
+    }
+    if(posten&&!p.has('s_pn')) d.s_pn=String(posten);
+    try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(e){}
+  }
+  history.replaceState(null,'','#'+k);
+  return k;
+}
+let eingebettet=false;
+window.addEventListener('hashchange',()=>{const k=ausAdresse(); if(k) show(k);});
 let start='kauf'; try{start=localStorage.getItem('gnotkg-tab')||'kauf'}catch(e){} if(!M[start]) start='kauf';
-show(start);
+show(ausAdresse()||start);
 </script>
 <script>
 // Offline-Betrieb: Service Worker registrieren (nur über https bzw. localhost)
