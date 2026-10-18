@@ -230,11 +230,13 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
   const P=[{sec:'Überlassungsvertrag'}],D=[],N=[];
 
   // Pflichtteilsverzicht (§ 102 Abs. 4): Pflichtteilsquote je Verzichtendem; beschränkt auf das Übertragene
-  // zählt nur der reine Schenkungswert (Verkehrswert abzüglich vorbehaltener und übernommener Leistungen)
-  const art=sel('u_pv'), sw=Math.max(0,vw-gl), zeilen=[];
+  // zählt nur der reine Schenkungswert (Verkehrswert abzüglich vorbehaltener und übernommener Leistungen);
+  // das Rückforderungsrecht zählt dabei nicht mit, es wirkt nur auf den Wert der Überlassung
+  const glSchenkung=gl-rueck, art=sel('u_pv'), sw=Math.max(0,vw-glSchenkung), zeilen=[];
   let ptv=0, anteile=0;
   if(art!=='kein'){
-    if(art==='beschr') zeilen.push(`Schenkungswert ${eur(vw)} − ${eur(gl)} Gegenleistungen = ${eur(sw)}`);
+    if(art==='beschr') zeilen.push(`Schenkungswert ${eur(vw)} − ${eur(glSchenkung)} Gegenleistungen`
+      +(rueck?' (ohne Rückforderungsrecht)':'')+` = ${eur(sw)}`);
     for(const i of [1,2]){
       if(i===2&&!on('u2_an')) continue;
       const kinder=Math.max(0,Math.floor(val(`u${i}_kinder`))), verz=Math.min(kinder,Math.max(0,Math.floor(val(`u${i}_verz`))));
