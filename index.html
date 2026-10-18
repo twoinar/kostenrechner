@@ -746,10 +746,18 @@ document.getElementById('copy').addEventListener('click',async e=>{const b=e.cur
    Mit einbetten=1 meldet der Rechner jedes Ergebnis per postMessage an die einbettende Seite. */
 const FELDER={kauf:/^k_/,uebertragung:/^u\d?_/,scheidung:/^s_/,ehevertrag:/^e_/,testament:/^t_/,vollmacht:/^v_/,tabelle:/^x_/};
 const NEIN=['','0','false','nein','off'];
+// Monatsbrutto, dessen Netto (vor berufsbedingten Aufwendungen) dem angegebenen Netto entspricht; Netto steigt mit dem Brutto
+function bruttoAusNetto(netto,beamter,kinder,kirche){
+  let lo=0, hi=Math.max(1000,netto*4);
+  for(let n=0;n<60;n++){const m=(lo+hi)/2; if(bereinigtesNetto(m*12,beamter,kinder,kirche).netto<netto) lo=m; else hi=m;}
+  return Math.round(hi);
+}
 function ausAdresse(){
   const m=/^#([a-z]+)(?:\?(.*))?$/.exec(location.hash); if(!m||!M[m[1]]) return null;
   const k=m[1], p=new URLSearchParams(m[2]||'');
   if(p.has('einbetten')){ eingebettet=window.parent!==window; p.delete('einbetten'); }
+  // s_nm1/s_nm2: Nettoeinkommen monatlich statt Brutto; der Rechner rechnet es in das Brutto zurück
+  const netto=[1,2].map(i=>p.has(`s_nm${i}`)?parse(p.get(`s_nm${i}`)):null); p.delete('s_nm1'); p.delete('s_nm2');
   const werte=[...p].filter(([id])=>FELDER[k].test(id)&&/^[a-z0-9_]+$/.test(id));
   if(werte.length){
     const probe=document.createElement('div'); probe.innerHTML=M[k].form();
@@ -764,6 +772,8 @@ function ausAdresse(){
       const pt=/^s_p[tw](\d+)$/.exec(id); if(pt) posten=Math.max(posten,+pt[1]+1);
     }
     if(posten&&!p.has('s_pn')) d.s_pn=String(posten);
+    if(k==='scheidung') netto.forEach((n,j)=>{ const i=j+1; if(n==null||p.has(`s_bm${i}`)) return;
+      d[`s_bm${i}`]=n>0?num(bruttoAusNetto(n,d[`s_va${i}art`]==='beamt',Math.max(0,parseInt(d[`s_ki${i}`])||0),d[`s_kist${i}`]===true)):''; });
     try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(e){}
   }
   history.replaceState(null,'','#'+k);

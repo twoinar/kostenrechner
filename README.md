@@ -19,6 +19,7 @@ Andere Formulare (z. B. der Vorgesprächsbogen) können einen Reiter öffnen und
 
 - Vor dem `?` steht der Reiter (`kauf`, `uebertragung`, `scheidung`, `ehevertrag`, `testament`, `vollmacht`, `tabelle`), danach Feld-IDs aus `index.html` mit Werten.
 - Die übergebenen Werte ersetzen die gespeicherten Eingaben dieses Reiters; nicht übergebene Felder stehen auf der Vorgabe. Haken: `1` oder `0`.
+- Scheidung: `s_nm1`/`s_nm2` übergeben das Nettoeinkommen monatlich; der Rechner rechnet es in das Bruttoeinkommen (`s_bm1`/`s_bm2`) zurück (Steuerklasse I, Kinder und Kirchensteuer wie übergeben). Ein ebenfalls übergebenes Brutto geht vor.
 - Danach kürzt der Rechner die Adresse auf `#reiter`, damit ein Neuladen spätere Änderungen nicht überschreibt.
 - Mit `einbetten=1` meldet der Rechner in einem `<iframe>` jedes Ergebnis per `postMessage` an die einbettende Seite: `{typ:"gnotkg-kosten", reiter, titel, gw, netto, ust, durchlaufend, gesamt, text}`.
 
