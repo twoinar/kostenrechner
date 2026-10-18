@@ -222,6 +222,14 @@ function bereinigtesNetto(brutto,beamter,kinder,kirche){
   const netto=(brutto-est-soli-kist-kvpv-rvav)/12, beruf=Math.min(150,Math.max(50,netto*0.05));
   return {netto:r2(netto),beruf:r2(beruf),bereinigt:r2(Math.max(0,netto-beruf)),steuer:r2(est+soli+kist),sv:r2(kvpv+rvav)};
 }
+/* Erweiterbare Liste Hausrat, Fahrzeuge, Sonstiges: Zahl der Zeilen steht im versteckten Feld s_pn */
+const postenZahl=()=>Math.max(1,parseInt(document.getElementById('s_pn')?.value??gespeichert().s_pn)||1);
+function posten(){const n=Math.max(1,parseInt(gespeichert().s_pn)||1);
+  return `<input type="hidden" id="s_pn" value="${n}">`+Array.from({length:n},(_,k)=>
+    `<label for="s_pt${k}">Bezeichnung<input type="text" id="s_pt${k}" placeholder="z. B. Pkw, Hausrat"></label>`
+    +`<label for="s_pw${k}">Wert<input type="text" inputmode="decimal" id="s_pw${k}" data-money></label>`
+    +`<label class="check"><button type="button" class="copy" data-posten="weg" data-k="${k}" ${n<2?'disabled':''}>Zeile entfernen</button></label>`).join('')
+    +`<label class="check"><button type="button" class="copy" data-posten="neu">+ Zeile</button></label>`;}
 function vaEhegatte(i,art){
   return select(`s_va${i}art`,`Ehegatte ${i}: Versorgung`,[['grv','Gesetzliche Rentenversicherung',art==='grv'],['beamt','Beamtenversorgung',art==='beamt'],
       ['kapital','Kapitalwert laut Auskunft (Betriebsrente, privat)',art==='kapital'],['keine','keine Anwartschaft',art==='keine']])
@@ -467,7 +475,8 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
      +count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Versorgungsausgleich',select('s_vaa','Regelung',[['ausschluss','Ausschluss',1],['regelung','Regelung'],['kein','keine Regelung']])
      +select('s_varg','Rentenversicherung',[['ost','Ost (Beitrittsgebiet)',1],['west','West']])+count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG, bis heute gerechnet')+vaEhegatte(1,'grv')+vaEhegatte(2,'grv'))
-  +fs('Weitere Regelungen',money('s_sorge','Sorge- und Umgangsrecht',0,'§ 36 Abs. 2, 3: regelmäßig 5.000 €')+money('s_hr','Hausrat, Fahrzeuge',0))
+  +fs('Weitere Regelungen',chk('s_zust','Zustimmung zur Scheidung (5.000 €)',false)+chk('s_sorg','Sorge- und Umgangsrecht (5.000 €)',false))
+  +fs('Hausrat, Fahrzeuge, Sonstiges',posten())
   +`<div class="derived" id="s_der"></div>`
   +fs('Vollzug und Auslagen',chk('s_vollzug','Vollzugsgebühr Nr. 22110 (bei Grundbesitz)',true)+chk('s_xml','XML-Strukturdaten Nr. 22114',true)
      +count('s_seiten','Seiten Dokumentenpauschale',60)+count('s_gba','Grundbuchabrufe',1)),
@@ -481,7 +490,8 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   const nu=r2(Math.abs(bn[0].bereinigt-bn[1].bereinigt)*0.45);
   const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
     ['Trennungsunterhalt',nu*val('s_tm')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
-    ['Versorgungsausgleich',va],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
+    ['Versorgungsausgleich',va],['Zustimmung zur Scheidung',on('s_zust')?5000:0],['Sorge- und Umgangsrecht',on('s_sorg')?5000:0],
+    ...Array.from({length:postenZahl()},(_,n)=>[document.getElementById(`s_pt${n}`)?.value.trim()||`Sonstiges ${n+1}`,val(`s_pw${n}`)])].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
   document.getElementById('s_der').textContent=bn.map((b,i)=>val(`s_bm${i+1}`)?`Ehegatte ${i+1}: Netto ${eur(b.netto)} mtl. (Steuern ${eur(r2(b.steuer/12))}, Sozialabgaben ${eur(r2(b.sv/12))}) − berufsbedingt ${eur(b.beruf)} = bereinigt ${eur(b.bereinigt)}\n`:'').join('')
     +(nu?`Unterhalt: (${eur(bn[0].bereinigt)} − ${eur(bn[1].bereinigt)}) × 0,45 = ${eur(nu)} monatlich\n`
@@ -629,6 +639,15 @@ function wiederherstellen(){
   if(d._baum) for(const i in d._baum) if(!BAUM[i]) BAUM[i]=d._baum[i];
 }
 document.getElementById('form').addEventListener('click',e=>{
+  const pb=e.target.closest('[data-posten]');
+  if(pb){ const n=postenZahl(), d=gespeichert();
+    speichern(); Object.assign(d,gespeichert());
+    if(pb.dataset.posten==='neu') d.s_pn=String(n+1);
+    else { const k=+pb.dataset.k;
+      for(let j=k;j<n-1;j++){d[`s_pt${j}`]=d[`s_pt${j+1}`]||'';d[`s_pw${j}`]=d[`s_pw${j+1}`]||'';}
+      delete d[`s_pt${n-1}`]; delete d[`s_pw${n-1}`]; d.s_pn=String(n-1); }
+    try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(err){}
+    show(cur); return; }
   if(e.target.id!=='reset') return;
   const d=gespeichert();
   for(const el of document.querySelectorAll('#form input[id],#form select[id]')) delete d[el.id];
