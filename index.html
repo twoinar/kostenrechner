@@ -66,6 +66,15 @@ input[type=text],input[type=number],select{font:inherit;font-family:var(--f-num)
   border-radius:5px;background:var(--bg);color:var(--ink);width:100%}
 select{font-family:var(--f-body)}
 .check{flex-direction:row;align-items:center;gap:8px;font-weight:400}
+/* Raster: Beschriftung, Feld und Hinweis liegen je Zeile auf gleicher Höhe */
+@supports (grid-template-rows:subgrid){
+  .fields{row-gap:0}
+  .fields>label{display:grid;grid-template-rows:subgrid;grid-row:span 3;row-gap:4px;align-content:start;margin-bottom:12px}
+  .fields>label:not(.check)>:first-child{align-self:end}
+  .fields>label>small{align-self:start}
+  .fields>label.check{display:flex;align-self:center;margin-bottom:12px}
+  .fields>.baum{grid-row:span 3}
+}
 .check input{width:16px;height:16px;accent-color:var(--accent)}
 .hint{font-size:.82rem;color:var(--muted);margin:10px 0 0;max-width:68ch}
 .derived{white-space:pre-line;font-family:var(--f-num);font-size:.85rem;background:var(--accent-soft);padding:8px 10px;border-radius:5px;margin-top:10px}
