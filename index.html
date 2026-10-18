@@ -209,11 +209,16 @@ function est2026(zve){const x=Math.floor(Math.max(0,zve));
   if(x<=69878){const z=(x-17799)/10000; return Math.floor((173.10*z+2397)*z+1034.87);}
   if(x<=277825) return Math.floor(0.42*x-11135.63);
   return Math.floor(0.45*x-19470.38);}
-function bereinigtesNetto(brutto,beamter,kinderlos,kirche){
-  const kvpv=beamter?0:Math.min(brutto,SV.bbgKv)*(SV.kv+SV.pv+(kinderlos?SV.pvKinderlos:0));
+// Kinder: ohne Kinder Zuschlag zur Pflegeversicherung, ab dem zweiten Kind Abschlag (höchstens bis zum fünften);
+// für Soli und Kirchensteuer der halbe Kinderfreibetrag je Kind (getrennt lebende Eltern).
+const KFB_HALB=4878;
+function bereinigtesNetto(brutto,beamter,kinder,kirche){
+  const pv=SV.pv+(kinder?-0.0025*Math.min(4,Math.max(0,kinder-1)):SV.pvKinderlos);
+  const kvpv=beamter?0:Math.min(brutto,SV.bbgKv)*(SV.kv+pv);
   const rvav=beamter?0:Math.min(brutto,SV.bbgRv)*(SV.rv+SV.av);
   const zve=brutto-1230-36-kvpv-(beamter?0:Math.min(brutto,SV.bbgRv)*SV.rv);
-  const est=est2026(zve), soli=r2(Math.min(est*0.055,Math.max(0,(est-20350)*0.119))), kist=kirche?r2(est*0.09):0;
+  const est=est2026(zve), estKind=est2026(zve-kinder*KFB_HALB);
+  const soli=r2(Math.min(estKind*0.055,Math.max(0,(estKind-20350)*0.119))), kist=kirche?r2(estKind*0.09):0;
   const netto=(brutto-est-soli-kist-kvpv-rvav)/12, beruf=Math.min(150,Math.max(50,netto*0.05));
   return {netto:r2(netto),beruf:r2(beruf),bereinigt:r2(Math.max(0,netto-beruf)),steuer:r2(est+soli+kist),sv:r2(kvpv+rvav)};
 }
@@ -456,8 +461,8 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
 scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach Nr. 21100. Die einzelnen Regelungen sind verschiedene Gegenstände; ihre Werte werden addiert (§ 35 Abs. 1, § 111 Nr. 2).',
  form:()=>fs('Vermögen',money('s_grund','Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')+money('s_verm','Übriges Vermögen (ohne Grundbesitz)',0,'Wert der übrigen übertragenen Gegenstände bzw. Ausgleichszahlung; wird zum Grundbesitz addiert')
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
-  +fs('Einkommen',money('s_bm1','Bruttoeinkommen Ehegatte 1, monatlich',4000)+money('s_bm2','Bruttoeinkommen Ehegatte 2, monatlich',2000,'× 12; gilt für Unterhalt und Versorgungsausgleich')
-     +chk('s_kist','Kirchensteuer (9 %)',false)+chk('s_kl','kinderlos (Pflegeversicherung)',false))
+  +fs('Einkommen',money('s_bm1','Bruttoeinkommen Ehegatte 1, monatlich',4000,'× 12; gilt für Unterhalt und Versorgungsausgleich')+count('s_ki1','Kinder Ehegatte 1',0,'für Pflegeversicherung, Soli und Kirchensteuer')+chk('s_kist1','Kirchensteuer (9 %)',false)
+     +money('s_bm2','Bruttoeinkommen Ehegatte 2, monatlich',2000)+count('s_ki2','Kinder Ehegatte 2',0)+chk('s_kist2','Kirchensteuer (9 %)',false))
   +fs('Unterhalt',count('s_tum','Trennungsunterhalt, Monate',0,'voraussichtlich bis zur Scheidung, z. B. 12')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
      +count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
   +fs('Versorgungsausgleich',select('s_vaa','Regelung',[['ausschluss','Ausschluss',1],['regelung','Regelung'],['kein','keine Regelung']])
@@ -472,7 +477,7 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
     return vaKapitalwert(art,val(`s_bm${i}`)*12,val(`s_va${i}kw`),val('s_ehe'),sel('s_varg')==='ost');});
   const va=sel('s_vaa')==='kein'?0:r2(vaKw.reduce((a,k)=>a+k.wert/2,0));
   const nuArt=sel('s_nua'), nuName=nuArt==='verzicht'?'Unterhaltsverzicht':'Nachehelicher Unterhalt';
-  const bn=[1,2].map(i=>bereinigtesNetto(val(`s_bm${i}`)*12,sel(`s_va${i}art`)==='beamt',on('s_kl'),on('s_kist')));
+  const bn=[1,2].map(i=>bereinigtesNetto(val(`s_bm${i}`)*12,sel(`s_va${i}art`)==='beamt',Math.max(0,Math.floor(val(`s_ki${i}`))),on(`s_kist${i}`)));
   const nu=r2(Math.abs(bn[0].bereinigt-bn[1].bereinigt)*0.45);
   const parts=[['Grundbesitz',val('s_grund')],['Übriges Vermögen',val('s_verm')],['Gütertrennung',val('s_gt')],
     ['Trennungsunterhalt',nu*val('s_tum')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
