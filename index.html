@@ -208,7 +208,9 @@ kauf:{name:'Kauf',titel:'Grundstückskaufvertrag',lead:'Beurkundung 2,0 nach Nr.
 uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nach Nr. 21100. Wert ist der Verkehrswert ohne Schuldenabzug (§§ 46, 38); sind die Gegenleistungen höher, gelten diese (§ 97 Abs. 3). Nutzungsrechte nach § 52 Abs. 4 mit dem Altersfaktor.',
  form:()=>fs('Gegenstand',money('u_vw','Verkehrswert Grundbesitz',300000)+money('u_sonst','Weiteres übertragenes Vermögen',0))
   +fs('Gegenleistungen',money('u_jw','Jahreswert Wohnrecht / Nießbrauch',6000,'z. B. ortsübliche Jahresmiete')+count('u_alter','Alter des Berechtigten',72,'jüngster bei mehreren Berechtigten')
-     +money('u_schuld','Übernommene Verbindlichkeiten',0)+money('u_pflege','Pflege, Herauszahlung, sonstige',0))
+     +money('u_schuld','Übernommene Verbindlichkeiten',0)+money('u_pflege','Pflege, Herauszahlung, sonstige',0)
+     +select('u_rueck','Rückforderungsrecht',[['0','keines'],['0.1','nur bei Veräußerung oder Belastung (10 %)',1],
+       ['0.5','mit den üblichen Voraussetzungen (50 %)'],['1','freies Rücktrittsrecht (100 %)']]))
   +`<div class="derived" id="u_der"></div>`
   +fs('Pflichtteilsverzicht weichender Geschwister',select('u_pv','Verzicht',[['beschr','gegenständlich beschränkt auf das Übertragene',1],['umfassend','umfassend (gesamter Nachlass)'],['kein','kein Verzicht']])
      +money('u_abf','Abfindung an die Verzichtenden',0,'gesamt; ist sie höher als der Verzichtswert, gilt sie (§ 97 Abs. 3)'))
@@ -219,8 +221,12 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
      +count('u_seiten','Seiten Dokumentenpauschale',60)+count('u_gba','Grundbuchabrufe',1)),
  calc(){
   const vw=val('u_vw')+val('u_sonst'); const f=nutzungsfaktor(val('u_alter')); const nutz=val('u_jw')*f;
-  const gl=nutz+val('u_schuld')+val('u_pflege'); const haupt=Math.max(vw,gl);
-  document.getElementById('u_der').textContent=`Nutzungsrecht ${eur(val('u_jw'))} × ${f} = ${eur(nutz)} · Gegenleistungen gesamt ${eur(gl)} · maßgeblich ${eur(haupt)}`;
+  // Rückforderungsrecht als Gegenleistung, bewertet mit einem Bruchteil des Grundstückswerts
+  const rq=parseFloat(sel('u_rueck'))||0, rueck=r2(val('u_vw')*rq);
+  const gl=nutz+val('u_schuld')+val('u_pflege')+rueck; const haupt=Math.max(vw,gl);
+  document.getElementById('u_der').textContent=`Nutzungsrecht ${eur(val('u_jw'))} × ${f} = ${eur(nutz)}`
+    +(rueck?` · Rückforderungsrecht ${num(rq*100)} % von ${eur(val('u_vw'))} = ${eur(rueck)}`:'')
+    +` · Gegenleistungen gesamt ${eur(gl)} · maßgeblich ${eur(haupt)}`;
   const P=[{sec:'Überlassungsvertrag'}],D=[],N=[];
 
   // Pflichtteilsverzicht (§ 102 Abs. 4): Pflichtteilsquote je Verzichtendem; beschränkt auf das Übertragene
@@ -256,7 +262,7 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
   P.push(...u,...auslagen(u,'',val('u_seiten')));
   const gba=val('u_gba'); if(gba>0) D.push({kv:'32011',txt:'Grundbuchabruf',sub:`${gba} × 8 €`,betrag:gba*8});
   if(gl>vw) N.push('Die Gegenleistungen übersteigen den Verkehrswert und bestimmen den Wert (§ 97 Abs. 3).');
-  N.push('Rückforderungsrechte, Anrechnungs- und Ausgleichsbestimmungen sind in der Regel derselbe Gegenstand und erhöhen den Wert nicht.');
+  N.push('Anrechnungs- und Ausgleichsbestimmungen sind in der Regel derselbe Gegenstand und erhöhen den Wert nicht.');
   return {gw:`Geschäftswert ${eur(w)}`,P,D,N};}
 },
 
