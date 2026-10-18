@@ -1,6 +1,6 @@
 // Hält den Rechner offline verfügbar. Bei jeder Änderung VERSION erhöhen,
 // damit die Geräte die neue Fassung laden.
-const VERSION = "kostenrechner-4";
+const VERSION = "kostenrechner-5";
 const DATEIEN = [
   "./",
   "index.html",
@@ -29,11 +29,12 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Erst das Netz fragen (immer aktuelle Fassung), ohne Netz aus dem Speicher
+// Erst das Netz fragen (immer aktuelle Fassung, am Browser-Zwischenspeicher vorbei),
+// ohne Netz aus dem Speicher
 self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET") return;
+  if (e.request.method !== "GET" || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: "no-cache" })
       .then((antwort) => {
         const kopie = antwort.clone();
         caches.open(VERSION).then((c) => c.put(e.request, kopie));
