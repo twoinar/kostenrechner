@@ -273,7 +273,7 @@ function baumEreignis(e){
     else if(a==='enkel') person.enkel.push({name:'',rolle:'verzicht'});
     else if(a==='weg'){ if(pfad.length===2) b.kinder[pfad[0]].enkel.splice(pfad[1],1); else b.kinder.splice(pfad[0],1); }
     else return;
-    baumZeichnen(i); run(); return;
+    baumZeichnen(i); run(); speichern(); return;
   }
   const f=t.dataset.feld;
   if(f==='ehegatte') b.ehegatte=t.checked;
@@ -548,7 +548,9 @@ for(const k in M){const b=document.createElement('button');b.type='button';b.rol
   b.onclick=()=>show(k);tabs.appendChild(b);}
 function show(k){cur=k;
   for(const b of tabs.children) b.setAttribute('aria-selected',b.dataset.k===k);
-  const m=M[k]; document.getElementById('form').innerHTML=`<h2>${m.titel}</h2><p class="lead">${m.lead}</p>`+m.form();
+  const m=M[k]; document.getElementById('form').innerHTML=`<h2>${m.titel}</h2><p class="lead">${m.lead}</p>`+m.form()
+    +`<p class="hint"><button class="copy" id="reset" type="button">Eingaben zurücksetzen</button></p>`;
+  wiederherstellen();
   document.getElementById('billName').textContent=m.name;
   try{localStorage.setItem('gnotkg-tab',k)}catch(e){}
   run();}
@@ -573,8 +575,34 @@ function run(){
     +(p.items?p.items.map(([t,x])=>`\n      ${t}: ${eur(x)}`).join(''):'')))
     .concat([`Zwischensumme netto: ${eur(netto)}`,`USt 19 %: ${eur(ust)}`]).concat(r.D.map(d=>`${d.txt}: ${eur(d.betrag)}`)).concat([`Gesamtbetrag: ${eur(total)}`]).join('\n');
 }
-document.getElementById('form').addEventListener('input',run);
-document.getElementById('form').addEventListener('change',run);
+/* Eingaben bleiben im Browser gespeichert (nur auf diesem Gerät), damit Beispiele nicht neu erfasst werden müssen */
+const SPEICHER='gnotkg-eingaben';
+function gespeichert(){try{return JSON.parse(localStorage.getItem(SPEICHER))||{}}catch(e){return {}}}
+function speichern(){
+  const d=gespeichert();
+  for(const el of document.querySelectorAll('#form input[id],#form select[id]')) d[el.id]=el.type==='checkbox'?el.checked:el.value;
+  d._baum=BAUM;
+  try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(e){}
+}
+function wiederherstellen(){
+  const d=gespeichert();
+  for(const el of document.querySelectorAll('#form input[id],#form select[id]')){
+    if(!(el.id in d)) continue;
+    if(el.type==='checkbox') el.checked=!!d[el.id];
+    else if(el.tagName!=='SELECT'||[...el.options].some(o=>o.value===d[el.id])) el.value=d[el.id];
+  }
+  if(d._baum) for(const i in d._baum) if(!BAUM[i]) BAUM[i]=d._baum[i];
+}
+document.getElementById('form').addEventListener('click',e=>{
+  if(e.target.id!=='reset') return;
+  const d=gespeichert();
+  for(const el of document.querySelectorAll('#form input[id],#form select[id]')) delete d[el.id];
+  if(cur==='uebertragung'){delete d._baum; for(const i in BAUM) delete BAUM[i];}
+  try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(err){}
+  show(cur);
+});
+document.getElementById('form').addEventListener('input',()=>{run();speichern();});
+document.getElementById('form').addEventListener('change',()=>{run();speichern();});
 document.getElementById('form').addEventListener('focusout',e=>{if(e.target.matches('[data-money]')&&e.target.value.trim()) e.target.value=num(parse(e.target.value));});
 document.getElementById('copy').addEventListener('click',async e=>{const b=e.currentTarget;
   try{await navigator.clipboard.writeText(last.text);b.textContent='Kopiert';}catch(err){b.textContent='Kopieren nicht möglich';}
