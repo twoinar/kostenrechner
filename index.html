@@ -300,71 +300,93 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
   +fs('Gegenleistungen',money('u_jw','Jahreswert Wohnrecht / Nießbrauch',6000,'z. B. ortsübliche Jahresmiete')+count('u_alter','Alter des Berechtigten',72,'jüngster bei mehreren Berechtigten')
      +money('u_schuld','Übernommene Verbindlichkeiten',0)+money('u_pflege','Pflege, Herauszahlung, sonstige',0)
      +select('u_rueck','Rückforderungsrecht',[['0','keines'],['0.1','nur bei Veräußerung oder Belastung (10 %)',1],
-       ['0.5','mit den üblichen Voraussetzungen (50 %)'],['1','freies Rücktrittsrecht (100 %)']]))
+       ['0.5','mit den üblichen Voraussetzungen (50 %)'],['1','freies Rücktrittsrecht (100 %)']])
+     +select('u_pvu','Pflichtteilsverzicht des Übernehmers',[['kein','keiner',1],['beschr','gegenständlich beschränkt auf das Übertragene'],['umfassend','umfassend (gesamter Nachlass)']]))
   +`<div class="derived" id="u_der"></div>`
   +fs('Pflichtteilsverzicht weichender Geschwister',select('u_pv','Verzicht',[['beschr','gegenständlich beschränkt auf das Übertragene',1],['umfassend','umfassend (gesamter Nachlass)'],['kein','kein Verzicht']])
      +money('u_abf','Abfindung an die Verzichtenden',0,'gesamt; ist sie höher als der Verzichtswert, gilt sie (§ 97 Abs. 3)'))
   +fs('Übergeber 1',uebergeber(1,100))
   +fs('Übergeber 2',chk('u2_an','Zweiter Übergeber (z. B. Ehegatte als Miteigentümer)',false)+uebergeber(2,50))
   +`<div class="derived" id="u_pt"></div>`
+  +`<div class="derived" id="u_sum"></div>`
   +fs('Vollzug und Auslagen',chk('u_vollzug','Vollzugsgebühr Nr. 22110',true)+chk('u_betr','Betreuung Nr. 22200',false)+chk('u_xml','XML-Strukturdaten Nr. 22114',true)
      +count('u_seiten','Seiten Dokumentenpauschale',60)+count('u_gba','Grundbuchabrufe',1)),
  calc(){
   const vw=val('u_vw')+val('u_sonst'); const f=nutzungsfaktor(val('u_alter')); const nutz=val('u_jw')*f;
   // Rückforderungsrecht als Gegenleistung, bewertet mit einem Bruchteil des Grundstückswerts
   const rq=parseFloat(sel('u_rueck'))||0, rueck=r2(val('u_vw')*rq);
-  const gl=nutz+val('u_schuld')+val('u_pflege')+rueck; const haupt=Math.max(vw,gl);
-  document.getElementById('u_der').textContent=`Nutzungsrecht ${eur(val('u_jw'))} × ${f} = ${eur(nutz)}`
-    +(rueck?` · Rückforderungsrecht ${num(rq*100)} % von ${eur(val('u_vw'))} = ${eur(rueck)}`:'')
-    +` · Gegenleistungen gesamt ${eur(gl)} · maßgeblich ${eur(haupt)}`;
   const P=[{sec:'Überlassungsvertrag'}],D=[],N=[];
-
-  // Pflichtteilsverzicht (§ 102 Abs. 4): Pflichtteilsquote je Verzichtendem; beschränkt auf das Übertragene
-  // zählt nur der reine Schenkungswert (Verkehrswert abzüglich vorbehaltener und übernommener Leistungen);
-  // das Rückforderungsrecht zählt dabei nicht mit, es wirkt nur auf den Wert der Überlassung
   for(const i of [1,2]){
     const baumModus=sel(`u${i}_modus`)==='baum', sichtbar=i===1||on('u2_an');
     for(const f of ['stand','kinder','verz']){const x=document.getElementById(`u${i}_${f}`); if(x) x.closest('label').hidden=baumModus;}
     const bel=document.getElementById(`u${i}_baum`);
     if(bel){bel.hidden=!baumModus||!sichtbar; if(baumModus&&sichtbar&&!bel.innerHTML) baumZeichnen(i);}
   }
-  const glSchenkung=gl-rueck, art=sel('u_pv'), sw=Math.max(0,vw-glSchenkung), zeilen=[];
-  let ptv=0, anteile=0;
-  if(art!=='kein'){
-    if(art==='beschr') zeilen.push(`Schenkungswert ${eur(vw)} − ${eur(glSchenkung)} Gegenleistungen`
-      +(rueck?' (ohne Rückforderungsrecht)':'')+` = ${eur(sw)}`);
+
+  // Pflichtteilsverzichte (§ 102 Abs. 4): Pflichtteilsquote × Bezugswert. Beschränkt auf das Übertragene ist der
+  // Bezugswert der reine Schenkungswert: Verkehrswert abzüglich vorbehaltener und übernommener Leistungen,
+  // ohne Rückforderungsrecht und ohne den Verzicht des Übernehmers (beide wirken nur auf den Wert der Überlassung).
+  const glSchenkung=nutz+val('u_schuld')+val('u_pflege'), sw=Math.max(0,vw-glSchenkung);
+  const art=sel('u_pv'), artU=sel('u_pvu'), zeilen=[];
+  let ptv=0, ptvU=0, anteile=0;
+  if(art!=='kein'||artU!=='kein'){
+    if(art==='beschr'||artU==='beschr') zeilen.push(`Schenkungswert ${eur(vw)} − ${eur(glSchenkung)} vorbehaltene/übernommene Leistungen = ${eur(sw)}`);
     for(const i of [1,2]){
       if(i===2&&!on('u2_an')) continue;
       const anteil=Math.min(100,Math.max(0,val(`u${i}_anteil`))); anteile+=anteil;
-      const bezug=art==='beschr'?r2(sw*anteil/100):val(`u${i}_rv`);
-      if(art==='umfassend'&&!bezug) N.push(`Übergeber ${i}: Bitte das Reinvermögen für den umfassenden Verzicht eintragen.`);
+      const bezug=a=>a==='beschr'?r2(sw*anteil/100):val(`u${i}_rv`);
+      if((art==='umfassend'||artU==='umfassend')&&!val(`u${i}_rv`)) N.push(`Übergeber ${i}: Bitte das Reinvermögen für den umfassenden Verzicht eintragen.`);
+      let personen;
       if(sel(`u${i}_modus`)==='baum'){
-        const q=baumQuoten(baum(i)), alle=Object.values(q.personen), verz=alle.filter(x=>x.rolle==='verzicht');
+        const q=baumQuoten(baum(i)); personen=Object.values(q.personen);
         zeilen.push(`Übergeber ${i}: `+(q.S?(q.ehegatte?`Ehegatte ${btxt(q.ehegatte)} · `:'')
-          +alle.map(x=>`${x.name}${x.rolle==='uebernehmer'?' (Übernehmer)':x.rolle==='verzicht'?' (verzichtet)':''} ${btxt(x.erb)}`).join(' · ')
+          +personen.map(x=>`${x.name}${x.rolle==='uebernehmer'?' (Übernehmer)':x.rolle==='verzicht'?' (verzichtet)':''} ${btxt(x.erb)}`).join(' · ')
           :'keine Abkömmlinge'));
-        if(!verz.length){zeilen.push(`Übergeber ${i}: kein Verzichtender`);continue;}
-        const summe=verz.reduce((s,x)=>bruchPlus(s,x.pt),[0,1]);
-        const wert=r2(bezug*summe[0]/summe[1]); ptv+=wert;
-        zeilen.push(`Verzicht: Pflichtteile ${verz.map(x=>btxt(x.pt)).join(' + ')}${verz.length>1?` = ${btxt(summe)}`:''} × ${eur(bezug)} = ${eur(wert)}`);
-        continue;
+      } else {
+        // Zahleneingabe: die ersten "davon verzichtend" Kinder verzichten, das nächste ist der Übernehmer
+        const kinder=Math.max(0,Math.floor(val(`u${i}_kinder`))), nv=Math.min(kinder,Math.max(0,Math.floor(val(`u${i}_verz`))));
+        const es=erbspiegel(sel(`u${i}_stand`),kinder||1);
+        personen=Array.from({length:kinder},(_,k)=>({name:`Kind ${k+1}`,erb:es.kind,pt:es.pflichtteil,rolle:k<nv?'verzicht':k===nv?'uebernehmer':'keine'}));
+        zeilen.push(`Übergeber ${i}: `+(kinder?`${es.ehegatte[0]?`Ehegatte ${btxt(es.ehegatte)}, `:''}Kinder je ${btxt(es.kind)}, Pflichtteil je ${btxt(es.pflichtteil)}`:'keine Abkömmlinge'));
       }
-      const kinder=Math.max(0,Math.floor(val(`u${i}_kinder`))), verz=Math.min(kinder,Math.max(0,Math.floor(val(`u${i}_verz`))));
-      if(!kinder||!verz){zeilen.push(`Übergeber ${i}: kein Verzichtender`);continue;}
-      const es=erbspiegel(sel(`u${i}_stand`),kinder);
-      const wert=r2(bezug*verz*es.pflichtteil[0]/es.pflichtteil[1]);
-      ptv+=wert;
-      zeilen.push(`Übergeber ${i}: ${es.ehegatte[0]?`Ehegatte ${btxt(es.ehegatte)}, `:''}Kinder je ${btxt(es.kind)}, Pflichtteil je ${btxt(es.pflichtteil)} · `
-        +`${verz} × ${btxt(es.pflichtteil)} × ${eur(bezug)} = ${eur(wert)}`);
+      const summe=liste=>liste.reduce((s,x)=>bruchPlus(s,x.pt),[0,1]);
+      const rechnung=(liste,b)=>{const sm=summe(liste); return {wert:r2(b*sm[0]/sm[1]),
+        text:`${liste.map(x=>btxt(x.pt)).join(' + ')}${liste.length>1?` = ${btxt(sm)}`:''} × ${eur(b)}`};};
+      if(art!=='kein'){
+        const verz=personen.filter(x=>x.rolle==='verzicht');
+        if(verz.length){const rz=rechnung(verz,bezug(art)); ptv+=rz.wert; zeilen.push(`  Verzicht der Geschwister: ${rz.text} = ${eur(rz.wert)}`);}
+        else zeilen.push('  kein verzichtendes Geschwister');
+      }
+      if(artU!=='kein'){
+        const ue=personen.filter(x=>x.rolle==='uebernehmer');
+        if(ue.length){const rz=rechnung(ue,bezug(artU)); ptvU+=rz.wert; zeilen.push(`  Verzicht des Übernehmers: ${rz.text} = ${eur(rz.wert)}`);}
+        else N.push(`Übergeber ${i}: Im Erbspiegel ist kein Übernehmer markiert.`);
+      }
     }
-    ptv=r2(ptv);
+    ptv=r2(ptv); ptvU=r2(ptvU);
     const abf=val('u_abf');
-    if(abf>ptv){zeilen.push(`Abfindung ${eur(abf)} ist höher als der Verzichtswert und gilt (§ 97 Abs. 3)`);ptv=abf;}
-    if(art==='beschr'&&Math.abs(anteile-100)>0.01) N.push(`Die Anteile der Übergeber ergeben ${num(anteile)} %, nicht 100 %.`);
+    if(art!=='kein'&&abf>ptv){zeilen.push(`Abfindung ${eur(abf)} ist höher als der Verzichtswert und gilt (§ 97 Abs. 3)`);ptv=abf;}
+    if((art==='beschr'||artU==='beschr')&&Math.abs(anteile-100)>0.01) N.push(`Die Anteile der Übergeber ergeben ${num(anteile)} %, nicht 100 %.`);
     if([1,2].some(i=>(i===1||on('u2_an'))&&(sel(`u${i}_modus`)==='baum'?baum(i).ehegatte&&baum(i).stand==='zugewinn':sel(`u${i}_stand`)==='zugewinn')))
       N.push('Pflichtteil bei Zugewinngemeinschaft nach der erbrechtlichen Lösung (Ehegatte 1/2).');
   }
-  document.getElementById('u_pt').textContent=art==='kein'?'Kein Pflichtteilsverzicht':zeilen.join('\n')+`\nPflichtteilsverzicht gesamt ${eur(ptv)}`;
+
+  // Gegenleistungen werden dem Verkehrswert gegenübergestellt, der höhere Betrag gilt (§ 97 Abs. 3)
+  const gl=r2(glSchenkung+rueck+ptvU), haupt=Math.max(vw,gl);
+  document.getElementById('u_der').textContent=[
+    `Nutzungsrecht ${eur(val('u_jw'))} × ${f} = ${eur(nutz)}`,
+    val('u_schuld')?`Übernommene Verbindlichkeiten ${eur(val('u_schuld'))}`:'',
+    val('u_pflege')?`Pflege, Herauszahlung, sonstige ${eur(val('u_pflege'))}`:'',
+    rueck?`Rückforderungsrecht ${num(rq*100)} % von ${eur(val('u_vw'))} = ${eur(rueck)}`:'',
+    ptvU?`Pflichtteilsverzicht des Übernehmers ${eur(ptvU)}`:'',
+    `Gegenleistungen gesamt ${eur(gl)} ⟷ Verkehrswert ${eur(vw)} · maßgeblich ${eur(haupt)}`,
+  ].filter(Boolean).join('\n');
+  document.getElementById('u_pt').textContent=art==='kein'&&artU==='kein'?'Kein Pflichtteilsverzicht'
+    :zeilen.join('\n')+(art!=='kein'?`\nPflichtteilsverzicht der Geschwister gesamt ${eur(ptv)}`:'');
+  document.getElementById('u_sum').textContent=
+    `Gegenstandsgleich (§ 109 Abs. 1): Überlassung ${eur(vw)} ⟷ Gegenleistungen ${eur(gl)} → ${eur(haupt)}`
+    +(ptv?`\nGegenstandsverschieden (§ 35 Abs. 1): Pflichtteilsverzicht der Geschwister ${eur(ptv)}`
+      +`\nGeschäftswert ${eur(haupt)} + ${eur(ptv)} = ${eur(haupt+ptv)}`:`\nGeschäftswert ${eur(haupt)}`);
   const w=haupt+ptv; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:ptv?`${eur(haupt)} + Pflichtteilsverzicht ${eur(ptv)}`:'',wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
   if(on('u_vollzug')) u.push({kv:'22110',txt:'Vollzugsgebühr',wert:w,satz:.5,betrag:gebuehr(w,.5)});
   if(on('u_betr')) u.push({kv:'22200',txt:'Betreuungsgebühr',wert:w,satz:.5,betrag:gebuehr(w,.5)});
