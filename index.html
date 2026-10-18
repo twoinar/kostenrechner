@@ -66,6 +66,16 @@ input[type=text],input[type=number],select{font:inherit;font-family:var(--f-num)
   border-radius:5px;background:var(--bg);color:var(--ink);width:100%}
 select{font-family:var(--f-body)}
 .check{flex-direction:row;align-items:center;gap:8px;font-weight:400}
+/* Raster: Beschriftung, Feld und Hinweis liegen je Zeile auf gleicher Höhe */
+@supports (grid-template-rows:subgrid){
+  .fields{row-gap:0}
+  .fields>label{display:grid;grid-template-rows:subgrid;grid-row:span 3;row-gap:4px;align-content:start;margin-bottom:12px}
+  .fields>label:not(.check)>:first-child{align-self:end}
+  .fields>label>small{align-self:start}
+  .fields>label.check{display:flex;align-self:center;margin-bottom:12px}
+  .fields>.baum{grid-row:span 3}
+  .fields>label[for^="s_kua"],.fields>label[for^="s_pt"],.fields>label[for="s_glv"],.fields>label[for="s_gt"]{grid-column-start:1}
+}
 .check input{width:16px;height:16px;accent-color:var(--accent)}
 .hint{font-size:.82rem;color:var(--muted);margin:10px 0 0;max-width:68ch}
 .derived{white-space:pre-line;font-family:var(--f-num);font-size:.85rem;background:var(--accent-soft);padding:8px 10px;border-radius:5px;margin-top:10px}
@@ -79,6 +89,9 @@ td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
 td.n,th.n{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
 td.kv{font-family:var(--f-num);font-size:.8rem;color:var(--muted);white-space:nowrap}
 td .sub{display:block;color:var(--muted);font-size:.78rem}
+td .items{list-style:none;margin:2px 0;padding:0;color:var(--muted);font-size:.78rem}
+td .items li{display:flex;justify-content:space-between;gap:12px}
+td .items li span:last-child{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
 tr.sum td{border-bottom:0;padding-top:9px}
 tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weight:600;font-size:1rem;padding-top:10px}
 tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding-top:14px;border-bottom:0}
@@ -128,6 +141,8 @@ tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:v
 </div>
 
 <script>
+/* Jahr der eingetragenen Rechenwerte; bei jeder Jahresaktualisierung erhöhen */
+const RECHENSTAND=2026;
 /* ---------- Tabelle B ---------- */
 const BANDS=[[2000,500,4],[10000,1000,6],[25000,3000,8],[50000,5000,10],[200000,15000,27],[500000,30000,50],
   [5000000,50000,80],[10000000,200000,130],[20000000,250000,150],[30000000,500000,280],[60000000,1000000,120]];
@@ -167,6 +182,82 @@ function auslagen(pos,label,seiten){
   return out;
 }
 const reinvermoegen=(a,p)=>Math.max(a-p,a/2);
+
+/* Versorgungsausgleich: Rechengrößen 2026 (VersAusglUmrFaktorBek 2026, SGB VI). Jährlich anpassen. */
+const VA={epBeitrag:9661.584,durchschnitt:51944,bbg:101400,rentenwert:42.52,beamtSatz:0.0179375,beamtMax:0.7175};
+// Hochwertung der Ost-Entgelte (Anlage 10 SGB VI); ab 2025 einheitlich
+const OST={1991:1.7235,1992:1.4393,1993:1.3197,1994:1.2687,1995:1.2317,1996:1.2209,1997:1.2089,1998:1.2113,1999:1.2054,2000:1.2030,
+  2001:1.2003,2002:1.1972,2003:1.1943,2004:1.1932,2005:1.1827,2006:1.1827,2007:1.1841,2008:1.1857,2009:1.1712,2010:1.1726,2011:1.1740,
+  2012:1.1785,2013:1.1762,2014:1.1665,2015:1.1502,2016:1.1415,2017:1.1374,2018:1.1339,2019:1.0840,2020:1.0700,2021:1.0560,2022:1.0420,
+  2023:1.0280,2024:1.0140};
+// Barkapitalwert der in der Ehezeit erworbenen Anwartschaft eines Ehegatten. Die Ehezeit wird vom laufenden Jahr
+// rückwärts gezählt; Ost-Entgelte werden je Jahr hochgewertet und erst danach an der Bemessungsgrenze gekappt.
+function vaKapitalwert(art,brutto,kw,jahre,ost){
+  if(art==='grv'){let ep=0; const jetzt=new Date().getFullYear();
+    for(let k=0;k<jahre;k++){const f=ost?(OST[jetzt-k]||(jetzt-k<1991?OST[1991]:1)):1; ep+=Math.min(1,jahre-k)*Math.min(brutto*f,VA.bbg)/VA.durchschnitt;}
+    const hw=ost&&jahre>0&&brutto>0?` (Ost, hochgewertet im Mittel × ${num(Math.round(ep*VA.durchschnitt/jahre/Math.min(brutto,VA.bbg)*10000)/10000)})`:'';
+    return {wert:r2(ep*VA.epBeitrag),text:`${num(Math.round(ep*10000)/10000)} Entgeltpunkte${hw} × ${num(VA.epBeitrag)} €`};}
+  if(art==='beamt'){const rente=brutto/12*Math.min(VA.beamtMax,VA.beamtSatz*jahre), ep=rente/VA.rentenwert;
+    return {wert:r2(ep*VA.epBeitrag),text:`Ruhegehalt ${eur(r2(rente))} mtl. ÷ Rentenwert ${num(VA.rentenwert)} € × ${num(VA.epBeitrag)} €`};}
+  if(art==='kapital') return {wert:kw,text:'laut Auskunft des Versorgungsträgers'};
+  return {wert:0,text:'keine Anwartschaft'};
+}
+/* Bereinigtes Nettoeinkommen für den Unterhalt aus dem Jahresbrutto, Steuerklasse I, Rechtsstand 2026:
+   Einkommensteuer § 32a EStG, Solidaritätszuschlag, Arbeitnehmeranteile zur Sozialversicherung,
+   davon 5 % berufsbedingte Aufwendungen (mind. 50 €, höchstens 150 € monatlich). Beamte ohne Sozialabgaben. */
+const SV={kv:0.0875,pv:0.018,pvKinderlos:0.006,rv:0.093,av:0.013,bbgKv:69750,bbgRv:101400};
+function est2026(zve){const x=Math.floor(Math.max(0,zve));
+  if(x<=12348) return 0;
+  if(x<=17799){const y=(x-12348)/10000; return Math.floor((914.51*y+1400)*y);}
+  if(x<=69878){const z=(x-17799)/10000; return Math.floor((173.10*z+2397)*z+1034.87);}
+  if(x<=277825) return Math.floor(0.42*x-11135.63);
+  return Math.floor(0.45*x-19470.38);}
+// Kinder: ohne Kinder Zuschlag zur Pflegeversicherung, ab dem zweiten Kind Abschlag (höchstens bis zum fünften);
+// für Soli und Kirchensteuer der halbe Kinderfreibetrag je Kind (getrennt lebende Eltern).
+const KFB_HALB=4878;
+function bereinigtesNetto(brutto,beamter,kinder,kirche){
+  const pv=SV.pv+(kinder?-0.0025*Math.min(4,Math.max(0,kinder-1)):SV.pvKinderlos);
+  const kvpv=beamter?0:Math.min(brutto,SV.bbgKv)*(SV.kv+pv);
+  const rvav=beamter?0:Math.min(brutto,SV.bbgRv)*(SV.rv+SV.av);
+  const zve=brutto-1230-36-kvpv-(beamter?0:Math.min(brutto,SV.bbgRv)*SV.rv);
+  const est=est2026(zve), estKind=est2026(zve-kinder*KFB_HALB);
+  const soli=r2(Math.min(estKind*0.055,Math.max(0,(estKind-20350)*0.119))), kist=kirche?r2(estKind*0.09):0;
+  const netto=(brutto-est-soli-kist-kvpv-rvav)/12, beruf=Math.min(150,Math.max(50,netto*0.05));
+  return {netto:r2(netto),beruf:r2(beruf),bereinigt:r2(Math.max(0,netto-beruf)),steuer:r2(est+soli+kist),sv:r2(kvpv+rvav)};
+}
+/* Erweiterbare Liste Hausrat, Fahrzeuge, Sonstiges: Zahl der Zeilen steht im versteckten Feld s_pn */
+const postenZahl=()=>Math.max(1,parseInt(document.getElementById('s_pn')?.value??gespeichert().s_pn)||1);
+function posten(){const n=Math.max(1,parseInt(gespeichert().s_pn)||1);
+  return `<input type="hidden" id="s_pn" value="${n}">`+Array.from({length:n},(_,k)=>
+    `<label for="s_pt${k}">Bezeichnung<input type="text" id="s_pt${k}" placeholder="z. B. Pkw, Hausrat"></label>`
+    +`<label for="s_pw${k}">Wert<input type="text" inputmode="decimal" id="s_pw${k}" data-money></label>`
+    +`<label class="check"><button type="button" class="copy" data-posten="weg" data-k="${k}" ${n<2?'disabled':''}>Zeile entfernen</button></label>`).join('')
+    +`<label class="check"><button type="button" class="copy" data-posten="neu">+ Zeile</button></label>`;}
+/* Kindesunterhalt je Kind; die Zeilen folgen der Zahl der unterhaltsberechtigten Kinder */
+// Laufzeit: bis zur Volljährigkeit; bei volljährigen Kindern (Ausbildung) längstens bis 25
+const kindJahre=alter=>alter<18?18-alter:Math.max(0,25-alter);
+const kinderZahl=()=>Math.max(0,Math.min(12,parseInt(document.getElementById('s_kun')?.value)||0));
+/* Düsseldorfer Tabelle 2026, Zahlbeträge nach Abzug des Kindergelds (259 €; minderjährig hälftig, volljährig voll).
+   Alle Oberlandesgerichte übernehmen sie für den Kindesunterhalt. Spalten: 0–5, 6–11, 12–17, ab 18 Jahre. */
+const DT_GRENZEN=[2100,2500,2900,3300,3700,4100,4500,4900,5300,5700,6400,7200,8200,9700,11200];
+const DT_ZAHL=[[356.5,428.5,523.5,439],[381.5,456.5,556.5,474],[405.5,484.5,589.5,509],[429.5,512.5,621.5,544],[454.5,540.5,654.5,579],
+  [493.5,585.5,706.5,635],[531.5,629.5,759.5,691],[570.5,674.5,811.5,747],[609.5,719.5,863.5,802],[648.5,763.5,915.5,858],
+  [687.5,808.5,968.5,914],[726.5,853.5,1020.5,970],[765.5,897.5,1072.5,1026],[804.5,942.5,1124.5,1082],[842.5,986.5,1176.5,1137]];
+const OLG=['Bamberg','Berlin (Kammergericht)','Brandenburg','Braunschweig','Bremen','Celle','Dresden','Düsseldorf','Frankfurt am Main','Hamburg','Hamm','Jena',
+  'Karlsruhe','Koblenz','Köln','München','Naumburg','Nürnberg','Oldenburg','Rostock','Saarbrücken','Schleswig','Stuttgart','Zweibrücken'];
+const dtGruppe=eink=>Math.min(DT_GRENZEN.length-1,DT_GRENZEN.findIndex(g=>eink<=g)<0?DT_GRENZEN.length-1:DT_GRENZEN.findIndex(g=>eink<=g));
+const dtZahl=(eink,alter)=>DT_ZAHL[dtGruppe(eink)][alter<6?0:alter<12?1:alter<18?2:3];
+function kinderUnterhalt(){const n=Math.max(0,Math.min(12,parseInt(gespeichert().s_kun)||0));
+  return count('s_kun','Unterhaltsberechtigte Kinder',n)
+    +select('s_olg','OLG-Bezirk (Wohnort)',OLG.map(o=>[o,o,o==='Dresden']))
+    +select('s_kbei','Kinder leben bei',[['1','Ehegatte 1'],['2','Ehegatte 2',1]])
+    +Array.from({length:n},(_,k)=>count(`s_kua${k}`,`Kind ${k+1}: Alter`,8,'Laufzeit bis 18; volljährig: bis 25')
+      +money(`s_kum${k}`,`Kind ${k+1}: abweichender Zahlbetrag`,0,'leer = Düsseldorfer Tabelle')).join('');}
+function vaEhegatte(i,art){
+  return select(`s_va${i}art`,`Ehegatte ${i}: Versorgung`,[['grv','Gesetzliche Rentenversicherung',art==='grv'],['beamt','Beamtenversorgung',art==='beamt'],
+      ['kapital','Kapitalwert laut Auskunft (Betriebsrente, privat)',art==='kapital'],['keine','keine Anwartschaft',art==='keine']])
+    +money(`s_va${i}kw`,`Ehegatte ${i}: Kapitalwert laut Auskunft`,0,'korrespondierender Kapitalwert, § 47 VersAusglG');
+}
 const nutzungsfaktor=alter=>alter<=30?20:alter<=50?15:alter<=70?10:5;
 
 /* Erbspiegel (§§ 1924, 1931, 1371, 2303 BGB): Erbquote je Kind und Pflichtteil als Bruch [Zähler, Nenner].
@@ -244,7 +335,7 @@ function baumEreignis(e){
     else if(a==='enkel') person.enkel.push({name:'',rolle:'verzicht'});
     else if(a==='weg'){ if(pfad.length===2) b.kinder[pfad[0]].enkel.splice(pfad[1],1); else b.kinder.splice(pfad[0],1); }
     else return;
-    baumZeichnen(i); run(); return;
+    baumZeichnen(i); run(); speichern(); return;
   }
   const f=t.dataset.feld;
   if(f==='ehegatte') b.ehegatte=t.checked;
@@ -399,27 +490,60 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
 },
 
 scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach Nr. 21100. Die einzelnen Regelungen sind verschiedene Gegenstände; ihre Werte werden addiert (§ 35 Abs. 1, § 111 Nr. 2).',
- form:()=>fs('Vermögen',money('s_verm','Vermögensauseinandersetzung',0,'Wert der übertragenen Gegenstände bzw. Ausgleichszahlung')+money('s_grund','davon / zusätzlich Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')
+ form:()=>fs('Vermögen',money('s_grund','Grundbesitz',180000,'Verkehrswert des übertragenen Anteils')+money('s_verm','Übriges Vermögen (ohne Grundbesitz)',0,'Wert der übrigen übertragenen Gegenstände; wird zum Grundbesitz addiert')
+     +money('s_glv','Gegenleistung: übernommene Verbindlichkeiten',0,'z. B. Darlehen, die der Erwerber übernimmt')
+     +money('s_glz','Gegenleistung: Zahlungen',0,'Ausgleichs- oder Abfindungszahlung; der höhere Wert gilt (§ 97 Abs. 3)')
      +money('s_gt','Gütertrennung (Reinvermögen nach § 100)',0,'falls Güterstand geändert wird'))
-  +fs('Unterhalt',money('s_nu','Nachehelicher Unterhalt, monatlich',0)+count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10)
-     +money('s_nuv','Unterhaltsverzicht, Wert',5000,'billiges Ermessen § 36 Abs. 1')+money('s_ku','Kindesunterhalt, monatlich gesamt',0)+count('s_kuj','Jahre Kindesunterhalt',10))
-  +fs('Weitere Regelungen',money('s_va','Versorgungsausgleich (Ausschluss/Regelung)',5000,'§ 36 Abs. 1')+money('s_sorge','Sorge- und Umgangsrecht',0,'§ 36 Abs. 2, 3: regelmäßig 5.000 €')+money('s_hr','Hausrat, Fahrzeuge',0))
+  +fs('Einkommen',money('s_bm1','Bruttoeinkommen Ehegatte 1, monatlich',4000,'× 12; gilt für Unterhalt und Versorgungsausgleich')+count('s_ki1','Kinder Ehegatte 1',0,'für Pflegeversicherung, Soli und Kirchensteuer')+chk('s_kist1','Kirchensteuer (9 %)',false)
+     +money('s_bm2','Bruttoeinkommen Ehegatte 2, monatlich',2000)+count('s_ki2','Kinder Ehegatte 2',0)+chk('s_kist2','Kirchensteuer (9 %)',false))
+  +fs('Unterhalt',count('s_tm','Trennungsunterhalt, Monate',24,'Vorgabe 24 Monate, anpassbar')+select('s_nua','Nachehelicher Unterhalt',[['verzicht','Verzicht',1],['regelung','Regelung'],['kein','keine Regelung']])
+     +count('s_nuj','Jahre (unbestimmt: 10, § 52 Abs. 3)',10))
+  +fs('Kindesunterhalt',kinderUnterhalt())
+  +fs('Versorgungsausgleich',select('s_vaa','Regelung',[['ausschluss','Ausschluss',1],['regelung','Regelung'],['kein','keine Regelung']])
+     +select('s_varg','Rentenversicherung',[['ost','Ost (Beitrittsgebiet)',1],['west','West']])+count('s_ehe','Ehedauer in Jahren',10,'Ehezeit nach § 3 VersAusglG, bis heute gerechnet')+vaEhegatte(1,'grv')+vaEhegatte(2,'grv'))
+  +fs('Weitere Regelungen',chk('s_zust','Zustimmung zur Scheidung (5.000 €)',false)+chk('s_sorg','Sorge- und Umgangsrecht (5.000 €)',false))
+  +fs('Hausrat, Fahrzeuge, Sonstiges',posten())
   +`<div class="derived" id="s_der"></div>`
   +fs('Vollzug und Auslagen',chk('s_vollzug','Vollzugsgebühr Nr. 22110 (bei Grundbesitz)',true)+chk('s_xml','XML-Strukturdaten Nr. 22114',true)
      +count('s_seiten','Seiten Dokumentenpauschale',60)+count('s_gba','Grundbuchabrufe',1)),
  calc(){
-  const parts=[['Vermögensauseinandersetzung',val('s_verm')],['Grundbesitz',val('s_grund')],['Gütertrennung',val('s_gt')],
-    ['Nachehelicher Unterhalt',val('s_nu')*12*val('s_nuj')],['Unterhaltsverzicht',val('s_nuv')],['Kindesunterhalt',val('s_ku')*12*val('s_kuj')],
-    ['Versorgungsausgleich',val('s_va')],['Sorge/Umgang',val('s_sorge')],['Hausrat',val('s_hr')]].filter(p=>p[1]>0);
+  const vaKw=[1,2].map(i=>{const art=sel(`s_va${i}art`);
+    const x=document.getElementById(`s_va${i}kw`); if(x) x.closest('label').hidden=art!=='kapital';
+    return vaKapitalwert(art,val(`s_bm${i}`)*12,val(`s_va${i}kw`),val('s_ehe'),sel('s_varg')==='ost');});
+  const va=sel('s_vaa')==='kein'?0:r2(vaKw.reduce((a,k)=>a+k.wert/2,0));
+  const nuArt=sel('s_nua'), nuName=nuArt==='verzicht'?'Unterhaltsverzicht':'Nachehelicher Unterhalt';
+  const bn=[1,2].map(i=>bereinigtesNetto(val(`s_bm${i}`)*12,sel(`s_va${i}art`)==='beamt',Math.max(0,Math.floor(val(`s_ki${i}`))),on(`s_kist${i}`)));
+  // Kindesunterhalt nach dem bereinigten Netto des barunterhaltspflichtigen Elternteils; er wird vor dem Ehegattenunterhalt abgezogen
+  const zahler=sel('s_kbei')==='1'?1:0, kEink=bn[zahler].bereinigt;
+  const ku=Array.from({length:kinderZahl()},(_,k)=>{const a=val(`s_kua${k}`), eig=val(`s_kum${k}`);
+    return {alter:a,jahre:kindJahre(a),zahl:eig||dtZahl(kEink,a),eigen:!!eig};});
+  // Ehegattenunterhalt nach den Leitlinien (z. B. OLG Brandenburg Nr. 15.2): erst 1/10 Erwerbstätigenbonus,
+  // dann Kindesunterhalt abziehen, dann Halbteilung. Ohne Kinder entspricht das 0,45 × Differenz.
+  const kuSumme=r2(ku.reduce((x,k)=>x+k.zahl,0)), ehe=bn.map((b,i)=>r2(b.bereinigt*0.9-(i===zahler?kuSumme:0)));
+  const nu=r2(Math.abs(ehe[0]-ehe[1])/2);
+  // Austausch (§ 97 Abs. 3): übertragenes Vermögen gegen Gegenleistungen, maßgeblich ist der höhere Wert
+  const leist=val('s_grund')+val('s_verm'), gegen=val('s_glv')+val('s_glz'), verm=Math.max(leist,gegen);
+  const parts=[[gegen>leist?'Vermögensauseinandersetzung (Gegenleistungen)':'Vermögensauseinandersetzung',verm],['Gütertrennung',val('s_gt')],
+    ['Trennungsunterhalt',nu*val('s_tm')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],...ku.map((k,i)=>[`Kindesunterhalt Kind ${i+1}`,r2(k.zahl*12*k.jahre)]),
+    ['Versorgungsausgleich',va],['Zustimmung zur Scheidung',on('s_zust')?5000:0],['Sorge- und Umgangsrecht',on('s_sorg')?5000:0],
+    ...Array.from({length:postenZahl()},(_,n)=>[document.getElementById(`s_pt${n}`)?.value.trim()||`Sonstiges ${n+1}`,val(`s_pw${n}`)])].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
-  document.getElementById('s_der').textContent=parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst';
-  const P=[{sec:'Scheidungsvereinbarung'}],D=[],N=[]; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:`${parts.length} Gegenstände addiert`,wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
+  document.getElementById('s_der').textContent=(gegen?`Vermögen: übertragen ${eur(leist)} ⟷ Gegenleistungen ${eur(gegen)} (Verbindlichkeiten ${eur(val('s_glv'))}, Zahlungen ${eur(val('s_glz'))}) · maßgeblich ${eur(verm)}\n`:'')
+    +bn.map((b,i)=>val(`s_bm${i+1}`)?`Ehegatte ${i+1}: Netto ${eur(b.netto)} mtl. (Steuern ${eur(r2(b.steuer/12))}, Sozialabgaben ${eur(r2(b.sv/12))}) − berufsbedingt ${eur(b.beruf)} = bereinigt ${eur(b.bereinigt)}\n`:'').join('')
+    +(nu?`Unterhalt: (${eur(ehe[0])} − ${eur(ehe[1])}) ÷ 2 = ${eur(nu)} monatlich (bereinigt × 9/10${kuSumme?`, abzüglich Kindesunterhalt ${eur(kuSumme)} bei Ehegatte ${zahler+1}`:''})\n`
+      +(val('s_tm')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tm'))} Monate\n`:'')
+      +(nuArt!=='kein'?`${nuName}: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:''):'')
+    +(ku.length?`Kindesunterhalt: Düsseldorfer Tabelle 2026 (OLG ${sel('s_olg')}), Gruppe ${dtGruppe(kEink)+1} nach ${eur(kEink)} von Ehegatte ${zahler+1}\n`:'')
+    +ku.map((k,i)=>`Kind ${i+1} (Alter ${num(k.alter)}): ${eur(k.zahl)}${k.eigen?' (abweichend)':''} × 12 × ${num(k.jahre)} Jahre\n`).join('')
+    +(va?vaKw.map((k,i)=>`Versorgung Ehegatte ${i+1}: ${k.text} = ${eur(k.wert)}, Hälfte ${eur(r2(k.wert/2))}\n`).join('')
+      +`Versorgungsausgleich: Summe der Hälften ${eur(va)}\n`:'')
+    +(parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst');
+  const P=[{sec:'Scheidungsvereinbarung'}],D=[],N=[]; const u=[{kv:'21100',txt:'Beurkundungsverfahren',sub:`${parts.length} Gegenstände addiert (§ 35 Abs. 1)`,items:parts,wert:w,satz:2,betrag:gebuehr(w,2,{min:120})}];
   const grund=val('s_grund')>0;
   if(on('s_vollzug')&&grund){u.push({kv:'22110',txt:'Vollzugsgebühr',wert:w,satz:.5,betrag:gebuehr(w,.5)});
     if(on('s_xml')) u.push({kv:'22114',txt:'XML-Strukturdaten',sub:'höchstens 250 €',wert:w,satz:.3,betrag:gebuehr(w,.3,{max:250})});}
   P.push(...u,...auslagen(u,'',val('s_seiten')));
   const gba=val('s_gba'); if(gba>0&&grund) D.push({kv:'32011',txt:'Grundbuchabruf',sub:`${gba} × 8 €`,betrag:gba*8});
-  if(val('s_nuv')>0&&val('s_nu')>0) N.push('Unterhaltsregelung und Unterhaltsverzicht sind beide erfasst. Bitte prüfen, ob sie denselben Anspruch betreffen.');
   N.push('Vollzugsgebühr wird aus dem gesamten Verfahrenswert berechnet (§ 112).');
   return {gw:`Geschäftswert ${eur(w)}`,P,D,N};}
 },
@@ -507,17 +631,20 @@ for(const k in M){const b=document.createElement('button');b.type='button';b.rol
   b.onclick=()=>show(k);tabs.appendChild(b);}
 function show(k){cur=k;
   for(const b of tabs.children) b.setAttribute('aria-selected',b.dataset.k===k);
-  const m=M[k]; document.getElementById('form').innerHTML=`<h2>${m.titel}</h2><p class="lead">${m.lead}</p>`+m.form();
+  const m=M[k]; document.getElementById('form').innerHTML=`<h2>${m.titel}</h2><p class="lead">${m.lead}</p>`+m.form()
+    +`<p class="hint"><button class="copy" id="reset" type="button">Eingaben zurücksetzen</button></p>`;
+  wiederherstellen();
   document.getElementById('billName').textContent=m.name;
   try{localStorage.setItem('gnotkg-tab',k)}catch(e){}
   run();}
 function run(){
   const m=M[cur]; const r=m.calc(); last=r;
+  if(new Date().getFullYear()>RECHENSTAND) r.N.unshift(`Rechenwerte mit Stand ${RECHENSTAND} (Steuer, Sozialversicherung, Düsseldorfer Tabelle, Versorgungsausgleich). Bitte auf Aktualisierung prüfen.`);
   const rows=[]; let netto=0;
   for(const p of r.P){
     if(p.sec){rows.push(`<tr class="sec"><td colspan="4">${p.sec}</td></tr>`);continue;}
     netto+=p.betrag;
-    rows.push(`<tr><td class="kv">${p.kv}</td><td>${p.txt}${p.sub?`<span class="sub">${p.sub}</span>`:''}${p.wert!=null?`<span class="sub">${satzTxt(p.satz)} aus ${eur(p.wert)}</span>`:''}</td><td class="n" colspan="2">${eur(p.betrag)}</td></tr>`);
+    rows.push(`<tr><td class="kv">${p.kv}</td><td>${p.txt}${p.sub?`<span class="sub">${p.sub}</span>`:''}${p.items?`<ul class="items">${p.items.map(([t,x])=>`<li><span>${t}</span><span>${eur(x)}</span></li>`).join('')}</ul>`:''}${p.wert!=null?`<span class="sub">${satzTxt(p.satz)} aus ${eur(p.wert)}</span>`:''}</td><td class="n" colspan="2">${eur(p.betrag)}</td></tr>`);
   }
   netto=r2(netto); const ust=r2(netto*.19); const durch=r2(r.D.reduce((a,d)=>a+d.betrag,0)); const total=r2(netto+ust+durch);
   rows.push(`<tr class="sum"><td></td><td>Zwischensumme netto</td><td class="n" colspan="2">${eur(netto)}</td></tr>`);
@@ -528,11 +655,47 @@ function run(){
   document.getElementById('bill').innerHTML=`<thead><tr><th>KV</th><th>Position</th><th class="n" colspan="2">Betrag</th></tr></thead><tbody>${rows.join('')}</tbody>`;
   document.getElementById('gw').textContent=r.gw;
   const n=document.getElementById('notes'); n.hidden=!r.N.length; n.innerHTML=r.N.length?`<ul>${r.N.map(x=>`<li>${x}</li>`).join('')}</ul>`:'';
-  last.text=[`Kostenberechnung ${m.titel}`,r.gw,''].concat(r.P.filter(p=>!p.sec).map(p=>`Nr. ${p.kv}  ${p.txt}${p.wert!=null?` (${satzTxt(p.satz)} aus ${eur(p.wert)})`:''}: ${eur(p.betrag)}`))
+  last.text=[`Kostenberechnung ${m.titel}`,r.gw,''].concat(r.P.filter(p=>!p.sec).map(p=>`Nr. ${p.kv}  ${p.txt}${p.wert!=null?` (${satzTxt(p.satz)} aus ${eur(p.wert)})`:''}: ${eur(p.betrag)}`
+    +(p.items?p.items.map(([t,x])=>`\n      ${t}: ${eur(x)}`).join(''):'')))
     .concat([`Zwischensumme netto: ${eur(netto)}`,`USt 19 %: ${eur(ust)}`]).concat(r.D.map(d=>`${d.txt}: ${eur(d.betrag)}`)).concat([`Gesamtbetrag: ${eur(total)}`]).join('\n');
 }
-document.getElementById('form').addEventListener('input',run);
-document.getElementById('form').addEventListener('change',run);
+/* Eingaben bleiben im Browser gespeichert (nur auf diesem Gerät), damit Beispiele nicht neu erfasst werden müssen */
+const SPEICHER='gnotkg-eingaben';
+function gespeichert(){try{return JSON.parse(localStorage.getItem(SPEICHER))||{}}catch(e){return {}}}
+function speichern(){
+  const d=gespeichert();
+  for(const el of document.querySelectorAll('#form input[id],#form select[id]')) d[el.id]=el.type==='checkbox'?el.checked:el.value;
+  d._baum=BAUM;
+  try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(e){}
+}
+function wiederherstellen(){
+  const d=gespeichert();
+  for(const el of document.querySelectorAll('#form input[id],#form select[id]')){
+    if(!(el.id in d)) continue;
+    if(el.type==='checkbox') el.checked=!!d[el.id];
+    else if(el.tagName!=='SELECT'||[...el.options].some(o=>o.value===d[el.id])) el.value=d[el.id];
+  }
+  if(d._baum) for(const i in d._baum) if(!BAUM[i]) BAUM[i]=d._baum[i];
+}
+document.getElementById('form').addEventListener('click',e=>{
+  const pb=e.target.closest('[data-posten]');
+  if(pb){ const n=postenZahl(), d=gespeichert();
+    speichern(); Object.assign(d,gespeichert());
+    if(pb.dataset.posten==='neu') d.s_pn=String(n+1);
+    else { const k=+pb.dataset.k;
+      for(let j=k;j<n-1;j++){d[`s_pt${j}`]=d[`s_pt${j+1}`]||'';d[`s_pw${j}`]=d[`s_pw${j+1}`]||'';}
+      delete d[`s_pt${n-1}`]; delete d[`s_pw${n-1}`]; d.s_pn=String(n-1); }
+    try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(err){}
+    show(cur); return; }
+  if(e.target.id!=='reset') return;
+  const d=gespeichert();
+  for(const el of document.querySelectorAll('#form input[id],#form select[id]')) delete d[el.id];
+  if(cur==='uebertragung'){delete d._baum; for(const i in BAUM) delete BAUM[i];}
+  try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(err){}
+  show(cur);
+});
+document.getElementById('form').addEventListener('input',()=>{run();speichern();});
+document.getElementById('form').addEventListener('change',e=>{run();speichern();if(e.target.id==='s_kun') show(cur);});
 document.getElementById('form').addEventListener('focusout',e=>{if(e.target.matches('[data-money]')&&e.target.value.trim()) e.target.value=num(parse(e.target.value));});
 document.getElementById('copy').addEventListener('click',async e=>{const b=e.currentTarget;
   try{await navigator.clipboard.writeText(last.text);b.textContent='Kopiert';}catch(err){b.textContent='Kopieren nicht möglich';}
