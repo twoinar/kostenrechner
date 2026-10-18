@@ -1,6 +1,6 @@
 // Hält den Rechner offline verfügbar. Bei jeder Änderung VERSION erhöhen,
 // damit die Geräte die neue Fassung laden.
-const VERSION = "kostenrechner-28";
+const VERSION = "kostenrechner-29";
 const DATEIEN = [
   "./",
   "index.html",
