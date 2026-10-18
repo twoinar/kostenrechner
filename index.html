@@ -74,7 +74,7 @@ select{font-family:var(--f-body)}
   .fields>label>small{align-self:start}
   .fields>label.check{display:flex;align-self:center;margin-bottom:12px}
   .fields>.baum{grid-row:span 3}
-  .fields>label[for^="s_kum"],.fields>label[for^="s_pt"],.fields>label[for="s_glv"],.fields>label[for="s_gt"]{grid-column-start:1}
+  .fields>label[for^="s_kua"],.fields>label[for^="s_pt"],.fields>label[for="s_glv"],.fields>label[for="s_gt"]{grid-column-start:1}
 }
 .check input{width:16px;height:16px;accent-color:var(--accent)}
 .hint{font-size:.82rem;color:var(--muted);margin:10px 0 0;max-width:68ch}
@@ -235,9 +235,22 @@ function posten(){const n=Math.max(1,parseInt(gespeichert().s_pn)||1);
 // Laufzeit: bis zur Volljährigkeit; bei volljährigen Kindern (Ausbildung) längstens bis 25
 const kindJahre=alter=>alter<18?18-alter:Math.max(0,25-alter);
 const kinderZahl=()=>Math.max(0,Math.min(12,parseInt(document.getElementById('s_kun')?.value)||0));
+/* Düsseldorfer Tabelle 2026, Zahlbeträge nach Abzug des Kindergelds (259 €; minderjährig hälftig, volljährig voll).
+   Alle Oberlandesgerichte übernehmen sie für den Kindesunterhalt. Spalten: 0–5, 6–11, 12–17, ab 18 Jahre. */
+const DT_GRENZEN=[2100,2500,2900,3300,3700,4100,4500,4900,5300,5700,6400,7200,8200,9700,11200];
+const DT_ZAHL=[[356.5,428.5,523.5,439],[381.5,456.5,556.5,474],[405.5,484.5,589.5,509],[429.5,512.5,621.5,544],[454.5,540.5,654.5,579],
+  [493.5,585.5,706.5,635],[531.5,629.5,759.5,691],[570.5,674.5,811.5,747],[609.5,719.5,863.5,802],[648.5,763.5,915.5,858],
+  [687.5,808.5,968.5,914],[726.5,853.5,1020.5,970],[765.5,897.5,1072.5,1026],[804.5,942.5,1124.5,1082],[842.5,986.5,1176.5,1137]];
+const OLG=['Bamberg','Berlin (Kammergericht)','Brandenburg','Braunschweig','Bremen','Celle','Dresden','Düsseldorf','Frankfurt am Main','Hamburg','Hamm','Jena',
+  'Karlsruhe','Koblenz','Köln','München','Naumburg','Nürnberg','Oldenburg','Rostock','Saarbrücken','Schleswig','Stuttgart','Zweibrücken'];
+const dtGruppe=eink=>Math.min(DT_GRENZEN.length-1,DT_GRENZEN.findIndex(g=>eink<=g)<0?DT_GRENZEN.length-1:DT_GRENZEN.findIndex(g=>eink<=g));
+const dtZahl=(eink,alter)=>DT_ZAHL[dtGruppe(eink)][alter<6?0:alter<12?1:alter<18?2:3];
 function kinderUnterhalt(){const n=Math.max(0,Math.min(12,parseInt(gespeichert().s_kun)||0));
   return count('s_kun','Unterhaltsberechtigte Kinder',n)
-    +Array.from({length:n},(_,k)=>money(`s_kum${k}`,`Kind ${k+1}: Unterhalt monatlich`,0)+count(`s_kua${k}`,`Kind ${k+1}: Alter`,8,'Laufzeit bis 18; volljährig: bis 25')).join('');}
+    +select('s_olg','OLG-Bezirk (Wohnort)',OLG.map(o=>[o,o,o==='Dresden']))
+    +select('s_kbei','Kinder leben bei',[['1','Ehegatte 1'],['2','Ehegatte 2',1]])
+    +Array.from({length:n},(_,k)=>count(`s_kua${k}`,`Kind ${k+1}: Alter`,8,'Laufzeit bis 18; volljährig: bis 25')
+      +money(`s_kum${k}`,`Kind ${k+1}: abweichender Zahlbetrag`,0,'leer = Düsseldorfer Tabelle')).join('');}
 function vaEhegatte(i,art){
   return select(`s_va${i}art`,`Ehegatte ${i}: Versorgung`,[['grv','Gesetzliche Rentenversicherung',art==='grv'],['beamt','Beamtenversorgung',art==='beamt'],
       ['kapital','Kapitalwert laut Auskunft (Betriebsrente, privat)',art==='kapital'],['keine','keine Anwartschaft',art==='keine']])
@@ -498,20 +511,26 @@ scheidung:{name:'Scheidung',titel:'Scheidungsfolgenvereinbarung',lead:'2,0 nach 
   const va=sel('s_vaa')==='kein'?0:r2(vaKw.reduce((a,k)=>a+k.wert/2,0));
   const nuArt=sel('s_nua'), nuName=nuArt==='verzicht'?'Unterhaltsverzicht':'Nachehelicher Unterhalt';
   const bn=[1,2].map(i=>bereinigtesNetto(val(`s_bm${i}`)*12,sel(`s_va${i}art`)==='beamt',Math.max(0,Math.floor(val(`s_ki${i}`))),on(`s_kist${i}`)));
-  const nu=r2(Math.abs(bn[0].bereinigt-bn[1].bereinigt)*0.45);
+  // Kindesunterhalt nach dem bereinigten Netto des barunterhaltspflichtigen Elternteils; er wird vor dem Ehegattenunterhalt abgezogen
+  const zahler=sel('s_kbei')==='1'?1:0, kEink=bn[zahler].bereinigt;
+  const ku=Array.from({length:kinderZahl()},(_,k)=>{const a=val(`s_kua${k}`), eig=val(`s_kum${k}`);
+    return {alter:a,jahre:kindJahre(a),zahl:eig||dtZahl(kEink,a),eigen:!!eig};});
+  const kuSumme=r2(ku.reduce((x,k)=>x+k.zahl,0)), ehe=bn.map((b,i)=>r2(b.bereinigt-(i===zahler?kuSumme:0)));
+  const nu=r2(Math.max(0,Math.abs(ehe[0]-ehe[1]))*0.45);
   // Austausch (§ 97 Abs. 3): übertragenes Vermögen gegen Gegenleistungen, maßgeblich ist der höhere Wert
   const leist=val('s_grund')+val('s_verm'), gegen=val('s_glv')+val('s_glz'), verm=Math.max(leist,gegen);
   const parts=[[gegen>leist?'Vermögensauseinandersetzung (Gegenleistungen)':'Vermögensauseinandersetzung',verm],['Gütertrennung',val('s_gt')],
-    ['Trennungsunterhalt',nu*val('s_tm')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],...Array.from({length:kinderZahl()},(_,k)=>[`Kindesunterhalt Kind ${k+1}`,val(`s_kum${k}`)*12*kindJahre(val(`s_kua${k}`))]),
+    ['Trennungsunterhalt',nu*val('s_tm')],[nuName,nuArt==='kein'?0:nu*12*val('s_nuj')],...ku.map((k,i)=>[`Kindesunterhalt Kind ${i+1}`,r2(k.zahl*12*k.jahre)]),
     ['Versorgungsausgleich',va],['Zustimmung zur Scheidung',on('s_zust')?5000:0],['Sorge- und Umgangsrecht',on('s_sorg')?5000:0],
     ...Array.from({length:postenZahl()},(_,n)=>[document.getElementById(`s_pt${n}`)?.value.trim()||`Sonstiges ${n+1}`,val(`s_pw${n}`)])].filter(p=>p[1]>0);
   const w=parts.reduce((a,p)=>a+p[1],0);
   document.getElementById('s_der').textContent=(gegen?`Vermögen: übertragen ${eur(leist)} ⟷ Gegenleistungen ${eur(gegen)} (Verbindlichkeiten ${eur(val('s_glv'))}, Zahlungen ${eur(val('s_glz'))}) · maßgeblich ${eur(verm)}\n`:'')
     +bn.map((b,i)=>val(`s_bm${i+1}`)?`Ehegatte ${i+1}: Netto ${eur(b.netto)} mtl. (Steuern ${eur(r2(b.steuer/12))}, Sozialabgaben ${eur(r2(b.sv/12))}) − berufsbedingt ${eur(b.beruf)} = bereinigt ${eur(b.bereinigt)}\n`:'').join('')
-    +(nu?`Unterhalt: (${eur(bn[0].bereinigt)} − ${eur(bn[1].bereinigt)}) × 0,45 = ${eur(nu)} monatlich\n`
+    +(nu?`Unterhalt: (${eur(ehe[0])} − ${eur(ehe[1])})${kuSumme?` nach Abzug Kindesunterhalt ${eur(kuSumme)}`:''} × 0,45 = ${eur(nu)} monatlich\n`
       +(val('s_tm')?`Trennungsunterhalt: ${eur(nu)} × ${num(val('s_tm'))} Monate\n`:'')
       +(nuArt!=='kein'?`${nuName}: ${eur(nu)} × 12 × ${num(val('s_nuj'))} Jahre\n`:''):'')
-    +Array.from({length:kinderZahl()},(_,k)=>val(`s_kum${k}`)?`Kind ${k+1}: ${eur(val(`s_kum${k}`))} × 12 × ${num(kindJahre(val(`s_kua${k}`)))} Jahre (Alter ${num(val(`s_kua${k}`))})\n`:'').join('')
+    +(ku.length?`Kindesunterhalt: Düsseldorfer Tabelle 2026 (OLG ${sel('s_olg')}), Gruppe ${dtGruppe(kEink)+1} nach ${eur(kEink)} von Ehegatte ${zahler+1}\n`:'')
+    +ku.map((k,i)=>`Kind ${i+1} (Alter ${num(k.alter)}): ${eur(k.zahl)}${k.eigen?' (abweichend)':''} × 12 × ${num(k.jahre)} Jahre\n`).join('')
     +(va?vaKw.map((k,i)=>`Versorgung Ehegatte ${i+1}: ${k.text} = ${eur(k.wert)}, Hälfte ${eur(r2(k.wert/2))}\n`).join('')
       +`Versorgungsausgleich: Summe der Hälften ${eur(va)}\n`:'')
     +(parts.length?parts.map(p=>`${p[0]} ${eur(p[1])}`).join(' + '):'Noch keine Werte erfasst');
