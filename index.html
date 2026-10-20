@@ -358,7 +358,7 @@ function baumEreignis(e){
 for(const typ of ['click','change','input']) document.addEventListener(typ,baumEreignis,true);
 function uebergeber(i,anteil){
   return count(`u${i}_anteil`,'Anteil am übertragenen Vermögen in %',anteil)
-    +select(`u${i}_modus`,'Eingabe',[['baum','Erbspiegel zeichnen',1],['zahl','Familienstand und Kinderzahl']])
+    +select(`u${i}_modus`,'Eingabe',[['baum','Erbfolge unten eingeben',1],['zahl','Familienstand und Kinderzahl']])
     +select(`u${i}_stand`,'Familienstand',[['zugewinn','verheiratet, Zugewinngemeinschaft',1],['trennung','verheiratet, Gütertrennung'],
       ['gemeinschaft','verheiratet, Gütergemeinschaft'],['allein','ledig, geschieden oder verwitwet']])
     +count(`u${i}_kinder`,'Kinder insgesamt',3,'mit Übernehmer; vorverstorbene mit Abkömmlingen zählen mit')
@@ -481,7 +481,7 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
       if(artU!=='kein'){
         const ue=personen.filter(x=>x.rolle==='uebernehmer');
         if(ue.length){const rz=rechnung(ue,bezug(artU,true)); ptvU+=rz.wert; zeilen.push(`  Verzicht des Übernehmers: ${rz.text} = ${eur(rz.wert)}`);}
-        else N.push(`Übergeber ${i}: Im Erbspiegel ist kein Übernehmer markiert.`);
+        else N.push(`Übergeber ${i}: In der Erbfolge ist kein Übernehmer markiert.`);
       }
     }
     ptv=r2(ptv); ptvU=r2(ptvU);
