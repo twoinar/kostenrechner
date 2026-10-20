@@ -416,8 +416,12 @@ kauf:{name:'Kauf',titel:'Grundstückskaufvertrag',lead:'Beurkundung 2,0 nach Nr.
 
 uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nach Nr. 21100. Wert ist der Verkehrswert ohne Schuldenabzug (§§ 46, 38); sind die Gegenleistungen höher, gelten diese (§ 97 Abs. 3). Nutzungsrechte nach § 52 Abs. 4 mit dem Altersfaktor.',
  form:()=>fs('Gegenstand',money('u_vw','Verkehrswert Grundbesitz',300000,'ohne Abzug für Bebauung durch den Erwerber')+money('u_sonst','Weiteres übertragenes Vermögen',0))
-  +fs('Gegenleistungen',select('u_nart','Vorbehaltenes Nutzungsrecht',[['wohn','Wohnungsrecht (Jahreswert von Hand)',1],['niess','Nießbrauch (5 % des Grundstückswerts)']])
-     +money('u_jw','Jahreswert Wohnrecht / Nießbrauch',6000,'Wohnrecht: z. B. ortsübliche Jahresmiete; Nießbrauch: 5 % des Grundstückswerts (§ 52 Abs. 5)')+count('u_alter','Alter des Berechtigten',72,'jüngster bei mehreren Berechtigten')
+  +fs('Gegenleistungen',select('u_nart','Vorbehaltenes Nutzungsrecht',[['wohn','Wohnungsrecht',1],['niess','Nießbrauch (5 % des Grundstückswerts)']])
+     +select('u_jwart','Jahreswert des Wohnungsrechts',[['proz','5 % des Grundstückswerts (§ 52 Abs. 5)',1],['miete','Vergleichsmiete (Wohnfläche × Miete × 12)'],['hand','von Hand']])
+     +count('u_mwfl','Wohnfläche (m²)',100,'ganze Wohnung bzw. ganzes Haus')+money('u_mqm','Vergleichsmiete (€/m² monatlich, netto kalt)',8)
+     +select('u_umf','Umfang des Wohnungsrechts',[['ganz','ganze Wohnung / ganzes Haus',1],['raeume','nur bestimmte Räume'],['mit','Mitbenutzungsrecht']])
+     +count('u_ant','Anteil (%)',50,'Anteil der Räume bzw. der Mitbenutzung am Ganzen')
+     +money('u_jw','Jahreswert Wohnrecht / Nießbrauch',6000,'wird berechnet; bei „von Hand“ hier eintragen')+count('u_alter','Alter des Berechtigten',72,'jüngster bei mehreren Berechtigten')
      +money('u_schuld','Übernommene Verbindlichkeiten',0,'valutierte Restschuld; bloß dingliche Übernahme der Grundschuld zählt nicht, Schuldbeitritt nur zur Hälfte')+money('u_pjw','Jahreswert Wart, Pflege, Verköstigung',0,'angesetzt 30 % × Altersfaktor (§§ 52 Abs. 4, 36 Abs. 1); bei mehreren Berechtigten zusammen')+money('u_pflege','Herauszahlung, Begräbnis, sonstige',0,'Begräbnis und Grabpflege meist 5.000 €')
      +select('u_rueck','Rückforderungsrecht',[['0','keines'],['0.1','nur bei Veräußerung oder Belastung (10 %)',1],
        ['0.5','mit den üblichen Voraussetzungen (50 %)'],['1','freies Rücktrittsrecht (100 %)']])
@@ -439,9 +443,17 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
  calc(){
   const vw=val('u_vw')+val('u_sonst'); const f=nutzungsfaktor(val('u_alter'));
   // Nießbrauch: Jahreswert 5 % des Grundstückswerts (§ 52 Abs. 5), Feld wird mitgeführt und gesperrt
-  const niess=sel('u_nart')==='niess', jwFeld=document.getElementById('u_jw');
-  if(jwFeld){ jwFeld.disabled=niess; if(niess) jwFeld.value=num(r2(val('u_vw')*.05)); }
-  const jw=niess?r2(val('u_vw')*.05):val('u_jw'); const nutz=jw*f;
+  // Wohnungsrecht: 5 % des Grundstückswerts oder Vergleichsmiete, bei einzelnen Räumen oder Mitbenutzung anteilig
+  const niess=sel('u_nart')==='niess', jwArt=niess?'proz':(sel('u_jwart')||'proz'), umf=niess||jwArt==='hand'?'ganz':(sel('u_umf')||'ganz');
+  const ant=umf==='ganz'?1:Math.min(100,Math.max(0,val('u_ant')))/100;
+  const jwVoll=jwArt==='proz'?r2(val('u_vw')*.05):jwArt==='miete'?r2(val('u_mwfl')*val('u_mqm')*12):val('u_jw');
+  const jw=r2(jwVoll*ant), nutz=jw*f;
+  const zeig=(id,an)=>{const x=document.getElementById(id); if(x) x.closest('label').hidden=!an;};
+  zeig('u_jwart',!niess); zeig('u_mwfl',!niess&&jwArt==='miete'); zeig('u_mqm',!niess&&jwArt==='miete');
+  zeig('u_umf',!niess&&jwArt!=='hand'); zeig('u_ant',!niess&&jwArt!=='hand'&&umf!=='ganz');
+  const jwFeld=document.getElementById('u_jw'); if(jwFeld){ jwFeld.disabled=jwArt!=='hand'; if(jwFeld.disabled) jwFeld.value=num(jw); }
+  const jwHer=jwArt==='proz'?`5 % von ${eur(val('u_vw'))}`:jwArt==='miete'?`${num(val('u_mwfl'))} m² × ${eur(val('u_mqm'))} × 12`:'';
+  const jwText=(jwHer?` (${jwHer}${ant<1?`, davon ${num(ant*100)} % ${umf==='mit'?'Mitbenutzung':'für die Räume'}`:''})`:'');
   // Rückforderungsrecht als Gegenleistung, bewertet mit einem Bruchteil des Grundstückswerts
   const rq=parseFloat(sel('u_rueck'))||0, rueck=r2(val('u_vw')*rq);
   const P=[{sec:'Überlassungsvertrag'}],D=[],N=[],G=[];
@@ -508,7 +520,7 @@ uebertragung:{name:'Übertragung',titel:'Überlassung / Schenkung',lead:'2,0 nac
   const abfGl=on('u_abfgl')&&art!=='kein'?val('u_abf'):0;
   const gl=r2(glSchenkung+rueck+ptvU+abfGl), haupt=Math.max(vw,gl);
   document.getElementById('u_der').textContent=[
-    `${niess?'Nießbrauch':'Nutzungsrecht'} ${eur(jw)}${niess?` (5 % von ${eur(val('u_vw'))})`:''} × ${f} = ${eur(nutz)}`,
+    `${niess?'Nießbrauch':'Wohnungsrecht'} ${eur(jw)}${jwText} × ${f} = ${eur(nutz)}`,
     val('u_schuld')?`Übernommene Verbindlichkeiten ${eur(val('u_schuld'))}`:'',
     pflege?`Wart, Pflege, Verköstigung ${eur(val('u_pjw'))} × ${f} × 30 % = ${eur(pflege)}`:'',
     val('u_pflege')?`Herauszahlung, Begräbnis, sonstige ${eur(val('u_pflege'))}`:'',
