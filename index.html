@@ -100,6 +100,13 @@ tr.sec td{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:v
 .notes li+li{margin-top:4px}
 .uebernahme{margin-top:14px;font:inherit;font-weight:600;background:var(--accent);border:1px solid var(--accent);color:var(--bg);padding:8px 16px;border-radius:6px;cursor:pointer}
 .uebernahme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gs-zeile{grid-column:1/-1;margin-top:-6px}
+.gs-zeile>.copy{margin-top:0;padding:4px 10px;font-size:.82rem}
+.gs-wahl{margin-top:8px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:4px}
+.gs-wahl label.check{display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:400}
+.gs-wahl .n{margin-left:auto;font-variant-numeric:tabular-nums}
+.gs-summe{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-top:4px;font-weight:500}
+.gs-summe .copy{margin-top:0;padding:4px 10px}
 .copy{margin-top:14px;font:inherit;font-weight:500;background:transparent;border:1px solid var(--accent);color:var(--accent);padding:7px 14px;border-radius:6px;cursor:pointer}
 .foot{margin-top:28px;color:var(--muted);font-size:.8rem;max-width:90ch}
 .baum{margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:8px;background:var(--bg);grid-column:1/-1}
@@ -707,6 +714,7 @@ function show(k){cur=k;
   document.getElementById('billName').textContent=m.name;
   try{localStorage.setItem('gnotkg-tab',k)}catch(e){}
   if(location.hash&&location.hash!=='#'+k) history.replaceState(null,'','#'+k);
+  gsKnoepfe();
   run();}
 function run(){
   const m=M[cur]; const r=m.calc(); last=r;
@@ -839,6 +847,43 @@ document.getElementById('uebernehmen').addEventListener('click',e=>{
 });
 document.getElementById('zurueck').addEventListener('click',()=>window.close());
 window.addEventListener('hashchange',()=>{const k=ausAdresse(); if(k) show(k); rueckkanalKnoepfe();});
+/* Grundstückswerte aus dem Vorgesprächsbogen: der Bogen schickt je Grundstück Bezeichnung und Wert
+   ({typ:'gnotkg-grundstuecke',liste:[{name,w}]}); an den Wert- und Vermögensfeldern erscheint dann
+   „Grundstückswerte übernehmen“, bei mehreren Grundstücken mit Häkchen zur Auswahl. */
+let GS=[]; const gsAus={};
+const GS_FELDER=['k_vw','u_vw','s_grund','e_a1','e_a2','t_a1','t_a2','v_verm','x_w'];
+window.addEventListener('message',e=>{const d=e.data; const r=rueckkanal();
+  if(!r||e.source!==r||!d||d.typ!=='gnotkg-grundstuecke'||!Array.isArray(d.liste)) return;
+  GS=d.liste.filter(x=>x&&typeof x.w==='number'&&x.w>0).map(x=>({name:String(x.name||'Grundstück').slice(0,120),w:x.w}));
+  gsKnoepfe();});
+function gsSetzen(id,w){const el=document.getElementById(id); if(!el) return; el.value=num(w); el.dispatchEvent(new Event('input',{bubbles:true}));}
+function gsKnoepfe(){
+  document.querySelectorAll('#form .gs-zeile').forEach(x=>x.remove());
+  if(!GS.length) return;
+  for(const id of GS_FELDER){
+    const el=document.getElementById(id); if(!el) continue;
+    const z=document.createElement('div'); z.className='gs-zeile';
+    const b=document.createElement('button'); b.type='button'; b.className='copy';
+    b.textContent=GS.length>1?'Grundstückswerte übernehmen':`Grundstückswert übernehmen (${eur(GS[0].w)})`;
+    z.appendChild(b); el.closest('label').after(z);
+    z.addEventListener('input',e=>e.stopPropagation()); z.addEventListener('change',e=>e.stopPropagation());
+    b.onclick=()=>{
+      if(GS.length===1) return gsSetzen(id,GS[0].w);
+      let w=z.querySelector('.gs-wahl'); if(w){w.remove();return;}
+      const aus=gsAus[id]||(gsAus[id]=new Set());
+      w=document.createElement('div'); w.className='gs-wahl';
+      w.innerHTML=GS.map((g,i)=>`<label class="check"><input type="checkbox" data-i="${i}"${aus.has(i)?'':' checked'}><span>${escHtml(g.name)}</span><span class="n">${eur(g.w)}</span></label>`).join('')
+        +`<div class="gs-summe"><span></span><button type="button" class="copy">Summe übernehmen</button></div>`;
+      z.appendChild(w);
+      const summe=()=>GS.reduce((s,g,i)=>s+(aus.has(i)?0:g.w),0);
+      const zeigen=()=>{w.querySelector('.gs-summe span').textContent='Summe: '+eur(summe());};
+      w.addEventListener('change',e=>{const i=+e.target.dataset.i; if(e.target.checked) aus.delete(i); else aus.add(i); zeigen();});
+      w.querySelector('.gs-summe button').onclick=()=>{gsSetzen(id,summe()); w.remove();};
+      zeigen();
+    };
+  }
+}
+{const r=rueckkanal(); if(r) r.postMessage({typ:'gnotkg-grundstuecke-bitte'},'*');}
 let start='kauf'; try{start=localStorage.getItem('gnotkg-tab')||'kauf'}catch(e){} if(!M[start]) start='kauf';
 show(ausAdresse()||start);
 rueckkanalKnoepfe();
