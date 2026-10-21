@@ -708,6 +708,21 @@ vollmacht:{name:'Vorsorgevollmacht',titel:'Vorsorgevollmacht',lead:'Beurkundung 
   return {gw:`Geschäftswert ${eur(w)}`,P,D,N};}
 },
 
+nachlass:{name:'Nachlassverzeichnis',titel:'Nachlassverzeichnis',lead:'Aufnahme eines Vermögensverzeichnisses, z. B. notarielles Nachlassverzeichnis nach § 2314 BGB: 2,0 nach Nr. 23500. Geschäftswert ist der Wert der verzeichneten Gegenstände ohne Abzug der Verbindlichkeiten (§ 115 GNotKG).',
+ form:()=>fs('Nachlass',money('n_aktiv','Wert der verzeichneten Gegenstände (Aktivnachlass)',200000,'Verbindlichkeiten werden nicht abgezogen (§ 115 GNotKG)'))
+  +fs('Auswärtstätigkeit und Auslagen',count('n_ausw','Auswärtstätigkeit: angefangene halbe Stunden',0,'Nr. 26002: je angefangene halbe Stunde 50 €')
+     +count('n_km','Fahrtstrecke in km (hin und zurück)',0,'Nr. 32006: 0,42 € je km')+count('n_seiten','Seiten Dokumentenpauschale',20)),
+ calc(){
+  const w=val('n_aktiv'), P=[{sec:'Nachlassverzeichnis'}],D=[],N=[];
+  const u=[{kv:'23500',txt:'Aufnahme eines Vermögensverzeichnisses',wert:w,satz:2,betrag:gebuehr(w,2,{min:15})}];
+  const hs=Math.max(0,Math.round(val('n_ausw')));
+  if(hs) u.push({kv:'26002',txt:'Auswärtstätigkeit',sub:`${hs} × 50,00 € je angefangene halbe Stunde`,betrag:hs*50});
+  P.push(...u,...auslagen(u,'',val('n_seiten')));
+  const km=Math.max(0,val('n_km')); if(km) P.push({kv:'32006',txt:'Fahrtkosten eigener Pkw',sub:`${num(km)} km × 0,42 €`,betrag:r2(km*0.42)});
+  N.push('Fertigt der Notar daneben weitere Urkunden (z. B. Siegelung, Wertermittlung), sind diese gesondert zu berechnen.');
+  return {gw:`Geschäftswert ${eur(w)}`,P,D,N};}
+},
+
 tabelle:{name:'Tabelle B',titel:'Gebühr nachschlagen',lead:'Einzelne Gebühr aus Tabelle B für beliebigen Wert und Gebührensatz.',
  form:()=>fs('Eingabe',money('x_w','Geschäftswert',100000)+money('x_s','Gebührensatz',1)+money('x_min','Mindestgebühr',15))+`<div class="lookup" id="x_out"></div>`,
  calc(){
@@ -811,7 +826,7 @@ document.getElementById('copy').addEventListener('click',async e=>{const b=e.cur
    Die übergebenen Werte ersetzen die gespeicherten Eingaben dieses Reiters; nicht übergebene Felder stehen wieder
    auf der Vorgabe. Danach wird die Adresse auf #reiter gekürzt, damit ein Neuladen spätere Änderungen nicht überschreibt.
    Mit einbetten=1 meldet der Rechner jedes Ergebnis per postMessage an die einbettende Seite. */
-const FELDER={kauf:/^k_/,uebertragung:/^u\d?_/,scheidung:/^s_/,ehevertrag:/^e_/,testament:/^t_/,vollmacht:/^v_/,tabelle:/^x_/};
+const FELDER={kauf:/^k_/,uebertragung:/^u\d?_/,scheidung:/^s_/,ehevertrag:/^e_/,testament:/^t_/,vollmacht:/^v_/,nachlass:/^n_/,tabelle:/^x_/};
 const NEIN=['','0','false','nein','off'];
 // Monatsbrutto, dessen Netto (vor berufsbedingten Aufwendungen) dem angegebenen Netto entspricht; Netto steigt mit dem Brutto
 function bruttoAusNetto(netto,beamter,kinder,kirche){
