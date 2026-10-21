@@ -708,12 +708,14 @@ vollmacht:{name:'Vorsorgevollmacht',titel:'Vorsorgevollmacht',lead:'Beurkundung 
   return {gw:`Geschäftswert ${eur(w)}`,P,D,N};}
 },
 
-nachlass:{name:'Nachlassverzeichnis',titel:'Nachlassverzeichnis',lead:'Aufnahme eines Vermögensverzeichnisses, z. B. notarielles Nachlassverzeichnis nach § 2314 BGB: 2,0 nach Nr. 23500. Geschäftswert ist der Wert der verzeichneten Gegenstände ohne Abzug der Verbindlichkeiten (§ 115 GNotKG).',
- form:()=>fs('Nachlass',money('n_aktiv','Wert der verzeichneten Gegenstände (Aktivnachlass)',200000,'Verbindlichkeiten werden nicht abgezogen (§ 115 GNotKG)'))
+nachlass:{name:'Nachlassverzeichnis',titel:'Nachlassverzeichnis',lead:'Aufnahme eines Vermögensverzeichnisses, z. B. notarielles Nachlassverzeichnis nach § 2314 BGB: 2,0 nach Nr. 23500. Geschäftswert ist der Wert der verzeichneten Gegenstände (§ 115 GNotKG): aktiver, fiktiver und passiver Nachlass zusammen, ohne Abzug der Verbindlichkeiten.',
+ form:()=>fs('Nachlass',money('n_aktiv','Aktiver Nachlass',200000)+money('n_fikt','Fiktiver Nachlass',0,'ergänzungspflichtige Schenkungen, § 2325 BGB')
+     +money('n_pass','Passiver Nachlass',0,'Nachlassverbindlichkeiten – werden hinzugerechnet, nicht abgezogen'))+`<div class="derived" id="n_der"></div>`
   +fs('Auswärtstätigkeit und Auslagen',count('n_ausw','Auswärtstätigkeit: angefangene halbe Stunden',0,'Nr. 26002: je angefangene halbe Stunde 50 €')
      +count('n_km','Fahrtstrecke in km (hin und zurück)',0,'Nr. 32006: 0,42 € je km')+count('n_seiten','Seiten Dokumentenpauschale',20)),
  calc(){
-  const w=val('n_aktiv'), P=[{sec:'Nachlassverzeichnis'}],D=[],N=[];
+  const w=val('n_aktiv')+val('n_fikt')+val('n_pass'), P=[{sec:'Nachlassverzeichnis'}],D=[],N=[];
+  document.getElementById('n_der').textContent=`Aktiv ${eur(val('n_aktiv'))} + fiktiv ${eur(val('n_fikt'))} + passiv ${eur(val('n_pass'))} = ${eur(w)}`;
   const u=[{kv:'23500',txt:'Aufnahme eines Vermögensverzeichnisses',wert:w,satz:2,betrag:gebuehr(w,2,{min:15})}];
   const hs=Math.max(0,Math.round(val('n_ausw')));
   if(hs) u.push({kv:'26002',txt:'Auswärtstätigkeit',sub:`${hs} × 50,00 € je angefangene halbe Stunde`,betrag:hs*50});
