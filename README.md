@@ -15,7 +15,7 @@ Nach Änderungen in `sw.js` die `VERSION` erhöhen, damit installierte Geräte d
 
 Andere Formulare (z. B. der Vorgesprächsbogen) können einen Reiter öffnen und Felder vorbelegen:
 
-    https://twoinar.github.io/kostenrechner/#scheidung?s_grund=180000&s_bm1=4000&s_kun=2&s_kua0=5
+    https://tools.notariat-woinar.de/kostenrechner/#scheidung?s_grund=180000&s_bm1=4000&s_kun=2&s_kua0=5
 
 - Vor dem `?` steht der Reiter (`kauf`, `uebertragung`, `scheidung`, `ehevertrag`, `testament`, `vollmacht`, `tabelle`), danach Feld-IDs aus `index.html` mit Werten.
 - Die übergebenen Werte ersetzen die gespeicherten Eingaben dieses Reiters; nicht übergebene Felder stehen auf der Vorgabe. Haken: `1` oder `0`.
