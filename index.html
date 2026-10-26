@@ -306,6 +306,18 @@ function baum(i){
     :{ehegatte:true,stand:'zugewinn',kinder:[kindNeu('uebernehmer'),kindNeu('verzicht'),kindNeu('verzicht')]};
   return BAUM[i];
 }
+// Übernimmt eine von außen gelieferte Erbfolge (nur bekannte Felder, Namen gekürzt)
+function baumAusDaten(json){
+  let d; try{d=JSON.parse(json)}catch(e){return null}
+  if(!d||typeof d!=='object') return null;
+  const ROLLEN=['uebernehmer','verzicht','keine'], txt=x=>String(x||'').slice(0,120), rolle=r=>ROLLEN.includes(r)?r:'verzicht';
+  const r={};
+  for(const i of ['1','2']){ const b=d[i]; if(!b||!Array.isArray(b.kinder)) continue;
+    r[i]={ehegatte:!!b.ehegatte,stand:['zugewinn','trennung','gemeinschaft'].includes(b.stand)?b.stand:'zugewinn',
+      kinder:b.kinder.slice(0,30).map(k=>({name:txt(k&&k.name),rolle:rolle(k&&k.rolle),tot:!!(k&&k.tot),
+        enkel:(k&&Array.isArray(k.enkel)?k.enkel:[]).slice(0,30).map(n=>({name:txt(n&&n.name),rolle:rolle(n&&n.rolle)}))}))}; }
+  return Object.keys(r).length?r:null;
+}
 function baumQuoten(b){
   const S=b.kinder.filter(k=>!k.tot||k.enkel.length).length, personen={};
   const e=b.ehegatte?ehegattenQuote(b.stand,S||1):[0,1];
@@ -843,8 +855,11 @@ function ausAdresse(){
   if(p.has('fenster')){ fenster=!!window.opener; p.delete('fenster'); }
   // s_nm1/s_nm2: Nettoeinkommen monatlich statt Brutto; der Rechner rechnet es in das Brutto zurück
   const netto=[1,2].map(i=>p.has(`s_nm${i}`)?parse(p.get(`s_nm${i}`)):null); p.delete('s_nm1'); p.delete('s_nm2');
+  // u_baum: Erbfolge je Übergeber aus dem Erbspiegel des Vorgesprächsbogens (JSON {1:{ehegatte,stand,kinder},2:…})
+  let baumNeu=null;
+  if(k==='uebertragung'&&p.has('u_baum')){ baumNeu=baumAusDaten(p.get('u_baum')); p.delete('u_baum'); }
   const werte=[...p].filter(([id])=>FELDER[k].test(id)&&/^[a-z0-9_]+$/.test(id));
-  if(werte.length){
+  if(werte.length||baumNeu){
     const probe=document.createElement('div'); probe.innerHTML=M[k].form();
     const d=gespeichert();
     for(const id of Object.keys(d)) if(FELDER[k].test(id)) delete d[id];
@@ -857,6 +872,7 @@ function ausAdresse(){
       const pt=/^s_p[tw](\d+)$/.exec(id); if(pt) posten=Math.max(posten,+pt[1]+1);
     }
     if(posten&&!p.has('s_pn')) d.s_pn=String(posten);
+    if(baumNeu) d._baum=baumNeu;
     if(k==='scheidung') netto.forEach((n,j)=>{ const i=j+1; if(n==null||p.has(`s_bm${i}`)) return;
       d[`s_bm${i}`]=n>0?num(bruttoAusNetto(n,d[`s_va${i}art`]==='beamt',Math.max(0,parseInt(d[`s_ki${i}`])||0),d[`s_kist${i}`]===true)):''; });
     try{localStorage.setItem(SPEICHER,JSON.stringify(d))}catch(e){}
@@ -928,6 +944,6 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 </script>
-<p class="stand-version" style="font:12px/1.4 system-ui,sans-serif;color:#80868b;text-align:center;margin:24px 0 12px">Version 1.39 · Stand 23.10.2026</p><style>@media print{.stand-version{display:none}}</style>
+<p class="stand-version" style="font:12px/1.4 system-ui,sans-serif;color:#80868b;text-align:center;margin:24px 0 12px">Version 1.40 · Stand 26.10.2026</p><style>@media print{.stand-version{display:none}}</style>
 </body>
 </html>
